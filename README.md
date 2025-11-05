@@ -16,8 +16,8 @@ A **production-grade portfolio project** demonstrating high-performance architec
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
 - [API Endpoints](#api-endpoints)
-- [Performance Comparison](#performance-comparison)
 - [Project Structure](#project-structure)
+- [Performance Comparison](#performance-comparison)
 - [Development](#development)
 - [Infrastructure](#infrastructure)
 - [Key Learnings](#key-learnings)
@@ -222,20 +222,210 @@ podman-compose ps
 - **API Documentation**: http://localhost:5000
 - **Health Check**: http://localhost:5000/health
 
-### Quick Start
+### Development Setup Options
+
+#### Option 1: Local Development (Recommended for Development)
+
+**Terminal 1 - Redis & Database**
 ```bash
-# Terminal 1: Start services
+podman-compose up postgres redis
+# Wait for both services to be healthy
+```
+
+**Terminal 2 - .NET API**
+```bash
+dotnet run --project src/HighPerformanceTariffsAPI.Api
+# API will be available at http://localhost:5000
+```
+
+**Terminal 3 - Svelte Frontend**
+```bash
+cd demo
+pnpm dev
+# Frontend will be available at http://localhost:5173
+```
+
+**Terminal 4 - Open in Browser**
+```bash
+# Frontend: http://localhost:5173
+# API Docs: http://localhost:5000
+```
+
+#### Option 2: Full Containerized Stack (Recommended for Demos)
+
+```bash
+# Start everything
 podman-compose up -d
 
-# Terminal 2: Watch API logs
+# Check status
+podman-compose ps
+
+# View logs
 podman-compose logs -f api
 
-# Terminal 3: Frontend development
+# Access services
+# Frontend: http://localhost:3000
+# API: http://localhost:5000
+# API Docs: http://localhost:5000
+```
+
+### Verification Checklist
+
+- [ ] Backend builds without errors: `dotnet build`
+- [ ] Frontend builds without errors: `cd demo && pnpm build`
+- [ ] Can access API docs: http://localhost:5000
+- [ ] Can access frontend: http://localhost:3000 or http://localhost:5173
+- [ ] Test slow endpoint: Click "Test Endpoint" on "Slow Endpoint" card
+- [ ] Test fast endpoint: Click "Test Endpoint" on "Fast Endpoint" card
+
+### Common Commands
+
+#### Backend
+```bash
+# Build
+dotnet build HighPerformanceTariffsAPI.sln
+
+# Run API locally
+dotnet run --project src/HighPerformanceTariffsAPI.Api
+
+# Watch mode (auto-restart on changes)
+dotnet watch --project src/HighPerformanceTariffsAPI.Api
+
+# View dependencies
+dotnet list HighPerformanceTariffsAPI.sln
+```
+
+#### Frontend
+```bash
+# Navigate to demo folder
 cd demo
+
+# Install dependencies
 pnpm install
+
+# Start dev server
 pnpm dev
 
-# Open browser to http://localhost:5173
+# Build for production
+pnpm build
+
+# Preview production build
+pnpm preview
+```
+
+#### Docker/Podman
+```bash
+# Start specific services
+podman-compose up -d api
+podman-compose up -d redis
+
+# Stop all services
+podman-compose down
+
+# Clean everything (including volumes)
+podman-compose down -v
+
+# View service logs
+podman-compose logs api     # API logs only
+podman-compose logs -f      # All logs with follow
+podman-compose logs --tail=50 redis  # Last 50 lines of redis
+
+# Rebuild images
+podman-compose build
+
+# Push to registry
+podman-compose push
+```
+
+### API Testing
+
+#### Using curl
+```bash
+# Test slow endpoint
+curl http://localhost:5000/api/v1/tariffs/slow
+
+# Test fast endpoint
+curl http://localhost:5000/api/v1/tariffs/fast
+
+# Check health
+curl http://localhost:5000/health
+
+# View API docs
+open http://localhost:5000
+```
+
+#### Using the Frontend
+1. Go to http://localhost:5173 (or 3000 if containerized)
+2. Click "Test Endpoint" buttons on metric cards
+3. Run "Performance Test" to compare slow vs fast
+
+### Troubleshooting
+
+#### Backend won't compile
+```bash
+# Clean build artifacts
+dotnet clean
+dotnet build
+
+# Restore packages
+dotnet restore
+
+# Check .NET version
+dotnet --version  # Should be 9.0.x
+```
+
+#### Frontend won't build
+```bash
+# Clean node modules
+rm -rf demo/node_modules demo/pnpm-lock.yaml
+cd demo
+pnpm install
+pnpm build
+```
+
+#### Redis connection error
+```bash
+# Check if redis is running
+podman ps | grep redis
+
+# Check connection string
+# Should be: redis:6379 (containerized) or localhost:6379 (local)
+
+# Test redis connection
+redis-cli ping
+```
+
+#### Port already in use
+```bash
+# Find process using port
+lsof -i :5000      # API port
+lsof -i :3000      # Frontend port
+lsof -i :5173      # Dev server port
+lsof -i :6379      # Redis port
+
+# Kill process (if safe)
+kill -9 <PID>
+```
+
+### Performance Testing
+
+#### Load Test (Using Frontend)
+1. Navigate to frontend
+2. Click "Run Performance Test"
+3. Observe metrics for 5 test iterations
+4. View improvement percentage
+
+#### Manual Load Test
+```bash
+# Slow endpoint (5 requests)
+for i in {1..5}; do
+  time curl http://localhost:5000/api/v1/tariffs/slow > /dev/null
+done
+
+# Fast endpoint (5 requests)
+for i in {1..5}; do
+  time curl http://localhost:5000/api/v1/tariffs/fast > /dev/null
+done
 ```
 
 ## 📡 API Endpoints
@@ -330,6 +520,186 @@ GET /
 **Description**: Interactive Scalar API documentation
 
 Access at: http://localhost:5000
+
+## 📁 Project Structure
+
+### Complete Directory Tree
+
+```
+tariffs-sentry/
+├── 📄 HighPerformanceTariffsAPI.sln           # Main solution file (.NET 9)
+├── 📄 compose.yml                             # Podman/Docker Compose configuration
+├── 📄 .gitignore                              # Git ignore rules
+├── 📄 .env.example                            # Environment variables template
+├── 📄 LICENSE                                 # MIT License
+├── 📄 README.md                               # This comprehensive documentation
+├── 📄 CLAUDE.md                              # AI Assistant documentation reference
+├── 📄 AGENTS.md                              # Complete AI Assistant instructions
+│
+├── 📁 src/                                     # Backend source code
+│   │
+│   ├── 📁 HighPerformanceTariffsAPI.Domain/    # Domain Layer (Clean Architecture)
+│   │   ├── 📁 Entities/
+│   │   │   └── Tariff.cs                       # Core business entity
+│   │   ├── 📁 Interfaces/
+│   │   │   ├── ITariffRepository.cs             # Repository contract
+│   │   │   └── ICacheProvider.cs                # Cache provider contract
+│   │   ├── 📄 HighPerformanceTariffsAPI.Domain.csproj
+│   │   └── 📁 obj/                             # Build output
+│   │
+│   ├── 📁 HighPerformanceTariffsAPI.Application/ # Application Layer
+│   │   ├── 📁 DTOs/
+│   │   │   ├── TariffDto.cs                     # Data transfer object
+│   │   │   └── TariffsResponseDto.cs            # Response model
+│   │   ├── 📁 Services/
+│   │   │   ├── ITariffService.cs                # Service contract
+│   │   │   └── TariffService.cs                 # Business logic
+│   │   ├── 📄 HighPerformanceTariffsAPI.Application.csproj
+│   │   └── 📁 obj/                             # Build output
+│   │
+│   ├── 📁 HighPerformanceTariffsAPI.Infrastructure/ # Infrastructure Layer
+│   │   ├── 📁 Repositories/
+│   │   │   └── MockTariffRepository.cs          # Mock data provider
+│   │   ├── 📁 Caching/
+│   │   │   └── RedisCacheProvider.cs            # Redis implementation
+│   │   ├── 📄 HighPerformanceTariffsAPI.Infrastructure.csproj
+│   │   └── 📁 obj/                             # Build output
+│   │
+│   └── 📁 HighPerformanceTariffsAPI.Api/        # Presentation Layer (Minimal API)
+│       ├── 📄 Program.cs                        # Application startup & DI configuration
+│       ├── 📄 appsettings.json                  # Configuration (production)
+│       ├── 📄 appsettings.Development.json      # Configuration (development)
+│       ├── 📄 Dockerfile                        # Docker image definition
+│       ├── 📁 Properties/
+│       │   └── launchSettings.json              # Debug profile settings
+│       ├── 📄 HighPerformanceTariffsAPI.Api.csproj
+│       ├── 📄 HighPerformanceTariffsAPI.Api.http # Example HTTP requests
+│       └── 📁 obj/                             # Build output
+│
+├── 📁 demo/                                     # Frontend Demo Application (Svelte)
+│   ├── 📄 package.json                          # pnpm dependencies
+│   ├── 📄 pnpm-lock.yaml                        # Locked dependency versions
+│   ├── 📄 vite.config.js                        # Vite build configuration
+│   ├── 📄 tailwind.config.js                    # Tailwind CSS configuration
+│   ├── 📄 postcss.config.js                     # PostCSS plugins
+│   ├── 📄 .env.example                          # Environment template
+│   ├── 📄 .env                                  # Environment variables (local)
+│   ├── 📄 .gitignore                            # Git ignore rules
+│   ├── 📄 .dockerignore                         # Docker build ignore
+│   ├── 📄 Dockerfile                            # Docker image definition
+│   ├── 📄 svelte.config.js                      # Svelte configuration
+│   ├── 📄 jsconfig.json                         # JavaScript configuration
+│   ├── 📄 index.html                            # HTML entry point
+│   ├── 📄 README.md                             # Frontend documentation
+│   │
+│   ├── 📁 src/                                  # Source code
+│   │   ├── 📄 main.js                           # Application entry point
+│   │   ├── 📄 App.svelte                        # Root component
+│   │   ├── 📄 app.css                           # Global styles (Tailwind)
+│   │   │
+│   │   └── 📁 lib/                              # Reusable components
+│   │       ├── Dashboard.svelte                 # Main dashboard layout
+│   │       ├── Header.svelte                    # Header with navigation
+│   │       ├── MetricsSection.svelte            # Key metrics cards
+│   │       ├── MetricCard.svelte                # Individual metric display
+│   │       ├── PerformanceChart.svelte          # Performance comparison
+│   │       ├── ArchitectureInfo.svelte          # Architecture documentation
+│   │       └── NotificationArea.svelte          # Notification toast
+│   │
+│   ├── 📁 public/                               # Static assets
+│   │   └── vite.svg                             # Vite logo
+│   │
+│   └── 📁 node_modules/                         # Installed dependencies
+│       └── (dependencies listed in package.json)
+│
+└── 📁 .git/                                     # Git repository metadata
+    └── (git history and configuration)
+```
+
+### Key Files & Their Purpose
+
+#### Backend (.NET 9)
+
+| File | Purpose |
+|------|---------|
+| `src/HighPerformanceTariffsAPI.Domain/Entities/Tariff.cs` | Core entity representing a tariff record |
+| `src/HighPerformanceTariffsAPI.Domain/Interfaces/ITariffRepository.cs` | Contract for data access operations |
+| `src/HighPerformanceTariffsAPI.Application/Services/TariffService.cs` | Business logic for tariff operations |
+| `src/HighPerformanceTariffsAPI.Infrastructure/Repositories/MockTariffRepository.cs` | Mock data provider with 500 records |
+| `src/HighPerformanceTariffsAPI.Infrastructure/Caching/RedisCacheProvider.cs` | Redis cache wrapper |
+| `src/HighPerformanceTariffsAPI.Api/Program.cs` | API configuration, endpoints, middleware |
+| `HighPerformanceTariffsAPI.sln` | Solution file that references all 4 projects |
+
+#### Frontend (Svelte + Vite)
+
+| File | Purpose |
+|------|---------|
+| `demo/src/App.svelte` | Root component that imports Dashboard |
+| `demo/src/lib/Dashboard.svelte` | Main layout orchestrating all sections |
+| `demo/src/lib/Header.svelte` | Navigation and API docs button |
+| `demo/src/lib/MetricsSection.svelte` | Three metric cards with test buttons |
+| `demo/src/lib/PerformanceChart.svelte` | Performance comparison and testing |
+| `demo/src/lib/ArchitectureInfo.svelte` | Architecture overview and documentation |
+| `demo/src/app.css` | Global Tailwind styles |
+| `demo/vite.config.js` | Build and dev server configuration |
+
+#### Infrastructure
+
+| File | Purpose |
+|------|---------|
+| `compose.yml` | Orchestrates 4 containers: api, postgres, redis, demo |
+| `.env.example` | Template for environment variables |
+| `.gitignore` | Excludes build artifacts and dependencies |
+| `LICENSE` | MIT License |
+
+### Layer Responsibilities (Clean Architecture)
+
+#### Domain Layer (Entities & Interfaces)
+- `Tariff` entity with properties: Id, RegionCode, Rate, EffectiveDate
+- `ITariffRepository` interface defining data access contracts
+- `ICacheProvider` interface defining cache operations
+- **No external dependencies** - Zero NuGet packages (except for unit tests)
+
+#### Application Layer (Business Logic)
+- `TariffDto` for transferring tariff data
+- `TariffsResponseDto` for API responses
+- `TariffService` implementing business logic
+- `ITariffService` contract for service operations
+- **Depends on Domain layer only**
+
+#### Infrastructure Layer (External Services)
+- `MockTariffRepository` implementing `ITariffRepository` with 500 mock records
+- `RedisCacheProvider` implementing `ICacheProvider` with StackExchange.Redis
+- **Depends on Domain layer** - Implements interfaces defined in Domain
+
+#### API Layer (Presentation)
+- `Program.cs` with:
+  - Service registration (Dependency Injection)
+  - Middleware configuration (CORS, Rate Limiting, Scalar)
+  - Endpoint definitions (`/api/v1/tariffs/slow` and `/fast`)
+  - Health check endpoint (`/health`)
+- Minimal API pattern (no controllers)
+- **Depends on all layers below**
+
+### Docker Services (compose.yml)
+
+1. **PostgreSQL 16** (Port 5432)
+   - Database service (prepared for future use)
+   - Volumes: postgres_data
+
+2. **Redis 7** (Port 6379)
+   - Distributed cache
+   - Volumes: redis_data
+
+3. **API (.NET 9)** (Port 5000)
+   - Built from `src/HighPerformanceTariffsAPI.Api/Dockerfile`
+   - Depends on postgres and redis
+   - Environment: ASPNETCORE_ENVIRONMENT=Development
+
+4. **Demo Frontend** (Port 3000)
+   - Built from `demo/Dockerfile`
+   - Served via nginx/http-server
+   - Depends on api service
 
 ## 📊 Performance Comparison
 
