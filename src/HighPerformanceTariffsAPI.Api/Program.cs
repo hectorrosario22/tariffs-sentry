@@ -74,7 +74,7 @@ app.MapScalarApiReference(options =>
     options.WithTitle("High Performance Tariffs API")
         .WithTheme(ScalarTheme.Default)
         .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-}).WithName("ScalarUI").WithOpenApi();
+});
 
 // Health check endpoint
 app.MapGet("/health", () => new { status = "healthy", timestamp = DateTime.UtcNow })
