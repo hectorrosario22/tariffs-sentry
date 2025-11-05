@@ -3,27 +3,24 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 
 WORKDIR /src
 
-# Copy solution and projects
+# Copy solution and project files
 COPY ["HighPerformanceTariffsAPI.sln", "."]
-COPY ["src/HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj", "HighPerformanceTariffsAPI.Api/"]
-COPY ["src/HighPerformanceTariffsAPI.Application/HighPerformanceTariffsAPI.Application.csproj", "HighPerformanceTariffsAPI.Application/"]
-COPY ["src/HighPerformanceTariffsAPI.Domain/HighPerformanceTariffsAPI.Domain.csproj", "HighPerformanceTariffsAPI.Domain/"]
-COPY ["src/HighPerformanceTariffsAPI.Infrastructure/HighPerformanceTariffsAPI.Infrastructure.csproj", "HighPerformanceTariffsAPI.Infrastructure/"]
+COPY ["src/HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj", "src/HighPerformanceTariffsAPI.Api/"]
+COPY ["src/HighPerformanceTariffsAPI.Application/HighPerformanceTariffsAPI.Application.csproj", "src/HighPerformanceTariffsAPI.Application/"]
+COPY ["src/HighPerformanceTariffsAPI.Domain/HighPerformanceTariffsAPI.Domain.csproj", "src/HighPerformanceTariffsAPI.Domain/"]
+COPY ["src/HighPerformanceTariffsAPI.Infrastructure/HighPerformanceTariffsAPI.Infrastructure.csproj", "src/HighPerformanceTariffsAPI.Infrastructure/"]
 
 # Restore dependencies
 RUN dotnet restore "HighPerformanceTariffsAPI.sln"
 
-# Copy source code
+# Copy entire source code
 COPY . .
 
-# Build
+# Build the solution
 RUN dotnet build "HighPerformanceTariffsAPI.sln" -c Release -o /app/build
 
-# Publish stage
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS publish
-WORKDIR /src
-COPY --from=build /app/build .
-RUN dotnet publish "HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj" -c Release -o /app/publish
+# Publish the API project
+RUN dotnet publish "src/HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj" -c Release -o /app/publish
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
