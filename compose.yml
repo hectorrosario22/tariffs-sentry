@@ -1,0 +1,82 @@
+services:
+  # PostgreSQL Database (prepared for future use)
+  postgres:
+    image: postgres:16-alpine
+    container_name: tariffs-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tariffs
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tariffs-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: tariffs-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tariffs-network
+
+  # .NET API
+  api:
+    build:
+      context: .
+      dockerfile: src/HighPerformanceTariffsAPI.Api/Dockerfile
+    container_name: tariffs-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__Redis: redis:6379
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tariffs-network
+    restart: unless-stopped
+
+  # Svelte Demo Frontend
+  demo:
+    build:
+      context: ./demo
+      dockerfile: Dockerfile
+    container_name: tariffs-demo
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://api:5000
+    networks:
+      - tariffs-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  tariffs-network:
+    driver: bridge
