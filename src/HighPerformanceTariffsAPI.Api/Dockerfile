@@ -16,9 +16,6 @@ RUN dotnet restore "HighPerformanceTariffsAPI.sln"
 # Copy entire source code
 COPY . .
 
-# Build the solution
-RUN dotnet build "HighPerformanceTariffsAPI.sln" -c Release -o /app/build
-
 # Publish the API project
 RUN dotnet publish "src/HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj" -c Release -o /app/publish
 
@@ -27,7 +24,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
 WORKDIR /app
 
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 
 EXPOSE 5000
 
