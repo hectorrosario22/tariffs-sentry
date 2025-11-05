@@ -1,0 +1,23 @@
+{
+  "name": "high-performance-tariffs-demo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Demo dashboard for High Performance Tariffs API",
+  "author": "Portfolio",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "prettier --check ."
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "svelte": "^5.43.3",
+    "tailwindcss": "^4.1.16",
+    "vite": "^7.2.0"
+  }
+}
