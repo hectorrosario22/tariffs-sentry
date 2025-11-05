@@ -39,10 +39,31 @@ builder.Services.AddSingleton<ITariffRepository, MockTariffRepository>();
 builder.Services.AddSingleton<ITariffService, TariffService>();
 
 // Configure Redis
-var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379";
-var redis = ConnectionMultiplexer.Connect(redisConnection);
-builder.Services.AddSingleton(redis);
-builder.Services.AddSingleton<ICacheProvider, RedisCacheProvider>();
+try
+{
+    var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379";
+    var options = ConfigurationOptions.Parse(redisConnection);
+    options.ConnectTimeout = 5000;
+    options.AbortOnConnectFail = false;
+    var redis = ConnectionMultiplexer.Connect(options);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+    builder.Services.AddSingleton<ICacheProvider, RedisCacheProvider>();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Warning: Redis connection failed: {ex.Message}");
+    // Continue without Redis cache if connection fails
+    builder.Services.AddSingleton<ICacheProvider>(new NullCacheProvider());
+}
+
+// Null cache provider for when Redis is unavailable
+public class NullCacheProvider : ICacheProvider
+{
+    public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class => Task.FromResult<T?>(null);
+    public Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default) where T : class => Task.CompletedTask;
+    public Task RemoveAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(false);
+}
 
 var app = builder.Build();
 
