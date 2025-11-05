@@ -1,7 +1,7 @@
 services:
   # PostgreSQL Database (prepared for future use)
   postgres:
-    image: postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine
     container_name: tariffs-postgres
     environment:
       POSTGRES_USER: postgres
@@ -21,7 +21,7 @@ services:
 
   # Redis Cache
   redis:
-    image: redis:7-alpine
+    image: docker.io/library/redis:7-alpine
     container_name: tariffs-redis
     command: redis-server --appendonly yes
     ports:

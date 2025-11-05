@@ -69,7 +69,7 @@ app.UseCors("AllowAll");
 app.UseRateLimiter();
 
 // Map Scalar documentation to root
-app.MapScalarApiReference(options =>
+app.MapScalarApiReference("/", options =>
 {
     options.WithTitle("High Performance Tariffs API")
         .WithTheme(ScalarTheme.Default)
