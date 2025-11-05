@@ -9,8 +9,8 @@
 }
 
 body {
-  @apply text-gray-900 m-0;
-  background: linear-gradient(to bottom, #FFF5EB, #FFFBF5);
+  @apply text-slate-100 m-0;
+  background: linear-gradient(to bottom, #0F172A, #1E293B);
 }
 
 #app {
@@ -22,9 +22,10 @@ body {
 }
 
 .card {
-  @apply rounded-lg p-6;
-  background-color: #FFFBF5;
-  box-shadow: 0 4px 6px -1px rgba(247, 147, 30, 0.1), 0 2px 4px -1px rgba(247, 147, 30, 0.06);
+  @apply rounded-lg p-6 text-slate-100;
+  background-color: #1E293B;
+  box-shadow: 0 4px 6px -1px rgba(247, 147, 30, 0.15), 0 2px 4px -1px rgba(247, 147, 30, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.1);
 }
 
 .btn {
@@ -44,7 +45,14 @@ body {
 }
 
 .btn-secondary {
-  @apply btn bg-orange-50 text-orange-900 hover:bg-orange-100 border border-orange-200;
+  @apply btn text-slate-100 hover:bg-slate-700 border border-orange-500;
+  background-color: #334155;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background-color: #475569;
+  box-shadow: 0 0 8px rgba(247, 147, 30, 0.2);
 }
 
 .metric-card {
@@ -56,5 +64,5 @@ body {
 }
 
 .metric-label {
-  @apply text-sm text-gray-600 mt-2;
+  @apply text-sm text-slate-400 mt-2;
 }
