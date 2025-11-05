@@ -4,6 +4,7 @@ using HighPerformanceTariffsAPI.Infrastructure.Caching;
 using HighPerformanceTariffsAPI.Infrastructure.Repositories;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,13 +23,15 @@ builder.Services.AddCors(options =>
 // Add Rate Limiting
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter(policyName: "default", policy =>
-    {
-        policy.Window = TimeSpan.FromSeconds(60);
-        policy.PermitLimit = 100;
-        policy.QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst;
-        policy.QueueLimit = 0;
-    });
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 100,
+                Window = TimeSpan.FromSeconds(60)
+            }));
 });
 
 // Register Infrastructure Services
