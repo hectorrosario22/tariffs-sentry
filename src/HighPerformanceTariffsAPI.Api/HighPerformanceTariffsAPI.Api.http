@@ -1,0 +1,6 @@
+@HighPerformanceTariffsAPI.Api_HostAddress = http://localhost:5012
+
+GET {{HighPerformanceTariffsAPI.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
