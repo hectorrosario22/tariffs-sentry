@@ -15,7 +15,7 @@
       <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
         <span>🏗️</span> Backend Architecture
       </h3>
-      <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-2 text-sm">
+      <div class="p-4 rounded-lg border-2 border-orange-300 space-y-2 text-sm" style="background: linear-gradient(135deg, #FFF5EB, #FED7AA);">
         <p><strong>Framework:</strong> .NET 9 with Minimal APIs</p>
         <p><strong>Language:</strong> C#</p>
         <p><strong>Database:</strong> PostgreSQL 16</p>
@@ -29,7 +29,7 @@
       <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
         <span>⚡</span> Frontend Architecture
       </h3>
-      <div class="bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-2 text-sm">
+      <div class="p-4 rounded-lg border-2 border-blue-300 space-y-2 text-sm" style="background: linear-gradient(135deg, #DBEAFE, #BFDBFE);">
         <p><strong>Framework:</strong> Svelte 5</p>
         <p><strong>Build Tool:</strong> Vite 7</p>
         <p><strong>Styling:</strong> Tailwind CSS</p>
@@ -86,7 +86,7 @@
       <span>🔌</span> API Endpoints (v1)
     </h3>
     <div class="space-y-2 text-sm">
-      <div class="flex justify-between items-start bg-orange-50 p-3 rounded border border-orange-200">
+      <div class="flex justify-between items-start p-3 rounded border-2 border-orange-300" style="background: linear-gradient(135deg, #FFF5EB, #FED7AA);">
         <div>
           <p class="font-semibold text-orange-700">GET /api/v1/tariffs/slow</p>
           <p class="text-gray-600">Direct database read (~300ms)</p>
@@ -98,7 +98,7 @@
           <p class="text-gray-600">Redis cached endpoint (&lt;10ms)</p>
         </div>
       </div>
-      <div class="flex justify-between items-start bg-blue-50 p-3 rounded border border-blue-200">
+      <div class="flex justify-between items-start p-3 rounded border-2 border-blue-300" style="background: linear-gradient(135deg, #DBEAFE, #BFDBFE);">
         <div>
           <p class="font-semibold text-blue-700">GET /</p>
           <p class="text-gray-600">Scalar API documentation</p>
@@ -108,7 +108,7 @@
   </div>
 
   <!-- Technology Stack -->
-  <div class="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+  <div class="p-4 rounded-lg border-2" style="background: linear-gradient(135deg, #FFF5EB 0%, #DBEAFE 100%); border-color: #F7931E;">
     <h3 class="font-semibold text-gray-700 mb-3">💡 Technology Stack</h3>
     <p class="text-sm text-gray-600 mb-4">
       This project demonstrates modern development practices: Clean Architecture, distributed caching, API documentation,

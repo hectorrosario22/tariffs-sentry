@@ -7,7 +7,7 @@
   export let color = 'from-blue-400 to-blue-600';
 </script>
 
-<div class="card bg-gradient-to-br {color} text-white shadow-lg hover:shadow-xl transition-shadow">
+<div class="card bg-gradient-to-br {color} text-white shadow-lg hover:shadow-xl transition-all hover:scale-105" style="transition: all 0.3s ease;">
   <div class="flex justify-between items-start mb-4">
     <div>
       <p class="text-sm font-semibold opacity-90">{title}</p>

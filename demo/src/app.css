@@ -9,7 +9,8 @@
 }
 
 body {
-  @apply bg-gray-50 text-gray-900 m-0;
+  @apply text-gray-900 m-0;
+  background: linear-gradient(to bottom, #FFF5EB, #FFFBF5);
 }
 
 #app {
@@ -21,7 +22,9 @@ body {
 }
 
 .card {
-  @apply bg-white rounded-lg shadow-md p-6;
+  @apply rounded-lg p-6;
+  background-color: #FFFBF5;
+  box-shadow: 0 4px 6px -1px rgba(247, 147, 30, 0.1), 0 2px 4px -1px rgba(247, 147, 30, 0.06);
 }
 
 .btn {
@@ -29,11 +32,19 @@ body {
 }
 
 .btn-primary {
-  @apply btn bg-blue-600 text-white hover:bg-blue-700;
+  @apply btn text-white;
+  background: linear-gradient(135deg, #F7931E 0%, #3B82F6 100%);
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #FF6B35 0%, #1E3A8A 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(247, 147, 30, 0.3);
 }
 
 .btn-secondary {
-  @apply btn bg-gray-200 text-gray-800 hover:bg-gray-300;
+  @apply btn bg-orange-50 text-orange-900 hover:bg-orange-100 border border-orange-200;
 }
 
 .metric-card {

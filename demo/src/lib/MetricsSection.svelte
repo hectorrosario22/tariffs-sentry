@@ -66,7 +66,7 @@
     label="Direct Database"
     loading={slowLoading}
     onTest={fetchTariffsSlow}
-    color="from-orange-400 to-orange-600"
+    color="from-orange-400 via-orange-500 to-orange-600"
   />
 
   <MetricCard
@@ -82,7 +82,7 @@
     title="Cache Hit Rate"
     value={cacheHitRate}
     label="Performance Gain"
-    color="from-blue-400 to-blue-600"
+    color="from-orange-400 via-blue-400 to-blue-600"
   />
 </div>
 

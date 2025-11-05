@@ -59,7 +59,7 @@
   {#if slowData.length > 0}
     <div class="grid grid-cols-2 gap-6 mt-6">
       <!-- Slow Endpoint Results -->
-      <div class="bg-orange-50 p-4 rounded-lg border border-orange-200">
+      <div class="p-4 rounded-lg border-2 border-orange-300" style="background: linear-gradient(135deg, #FFF5EB, #FED7AA);">
         <h3 class="font-semibold text-orange-700 mb-3">Slow Endpoint (Database)</h3>
         <div class="space-y-2">
           {#each slowData as result}
@@ -94,11 +94,11 @@
     </div>
 
     {#if avgSlow > 0 && avgFast > 0}
-      <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <div class="mt-6 p-4 border-2 rounded-lg" style="background: linear-gradient(135deg, #FFF5EB, #DBEAFE); border-color: #F7931E;">
         <p class="text-sm text-gray-600 mb-2">Performance Improvement</p>
         <div class="flex items-end gap-4">
           <div>
-            <p class="text-3xl font-bold text-blue-600">
+            <p class="text-3xl font-bold" style="background: linear-gradient(135deg, #F7931E, #3B82F6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
               {((1 - avgFast / avgSlow) * 100).toFixed(1)}%
             </p>
             <p class="text-sm text-gray-600">faster</p>
