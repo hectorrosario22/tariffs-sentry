@@ -53,16 +53,7 @@ catch (Exception ex)
 {
     Console.WriteLine($"Warning: Redis connection failed: {ex.Message}");
     // Continue without Redis cache if connection fails
-    builder.Services.AddSingleton<ICacheProvider>(new NullCacheProvider());
-}
-
-// Null cache provider for when Redis is unavailable
-public class NullCacheProvider : ICacheProvider
-{
-    public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class => Task.FromResult<T?>(null);
-    public Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default) where T : class => Task.CompletedTask;
-    public Task RemoveAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    builder.Services.AddSingleton<ICacheProvider, NullCacheProvider>();
 }
 
 var app = builder.Build();
@@ -120,4 +111,13 @@ async Task<IResult> GetTariffsFast(ITariffService service, int limit = 500, int 
 {
     var result = await service.GetTariffsCachedAsync(limit, offset, ct);
     return Results.Ok(result);
+}
+
+// Null cache provider for when Redis is unavailable
+public class NullCacheProvider : ICacheProvider
+{
+    public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class => Task.FromResult<T?>(null);
+    public Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default) where T : class => Task.CompletedTask;
+    public Task RemoveAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(false);
 }
