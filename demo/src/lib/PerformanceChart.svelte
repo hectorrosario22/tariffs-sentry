@@ -1,15 +1,47 @@
 <script lang="ts">
-  let slowData = [];
-  let fastData = [];
+  import RequestDetailModal from './RequestDetailModal.svelte';
+
+  interface TestResult {
+    time: string | number;
+    label: string;
+    status?: number;
+    url?: string;
+    requestHeaders?: Record<string, string>;
+    responseHeaders?: Record<string, string>;
+    responseBody?: any;
+  }
+
+  let slowData: TestResult[] = [];
+  let fastData: TestResult[] = [];
   let avgSlow = 0;
   let avgFast = 0;
   let bypassKey = '';
+  let isModalOpen = false;
+  let selectedRequest: any = null;
 
   // Get bypass key from environment variable
   const validBypassKey = import.meta.env.VITE_BYPASS_KEY || 'performance-test-bypass';
 
   function fillBypassKey() {
     bypassKey = validBypassKey;
+  }
+
+  function openDetailsModal(result: TestResult, endpoint: string) {
+    selectedRequest = {
+      url: result.url || '',
+      method: 'GET',
+      requestHeaders: result.requestHeaders || {},
+      responseHeaders: result.responseHeaders || {},
+      responseBody: result.responseBody || {},
+      status: result.status || 0,
+      latency: typeof result.time === 'number' ? result.time : parseInt(result.time)
+    };
+    isModalOpen = true;
+  }
+
+  function closeModal() {
+    isModalOpen = false;
+    selectedRequest = null;
   }
 
   async function runPerformanceTest() {
@@ -27,26 +59,68 @@
     for (let i = 0; i < iterations; i++) {
       // Test slow endpoint
       try {
+        const url = `${apiUrl}/api/v1/tariffs/slow`;
         const start = performance.now();
-        await fetch(`${apiUrl}/api/v1/tariffs/slow`, {
-          headers
-        });
+        const response = await fetch(url, { headers });
         const time = performance.now() - start;
-        slowData = [...slowData, { time: time.toFixed(0), label: `Run ${i + 1}` }];
+
+        // Capturar headers de respuesta
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+
+        // Capturar body de respuesta
+        const responseBody = await response.json();
+
+        slowData = [...slowData, {
+          time: time.toFixed(0),
+          label: `Run ${i + 1}`,
+          status: response.status,
+          url,
+          requestHeaders: headers,
+          responseHeaders,
+          responseBody
+        }];
       } catch (e) {
-        slowData = [...slowData, { time: 'Error', label: `Run ${i + 1}` }];
+        slowData = [...slowData, {
+          time: 'Error',
+          label: `Run ${i + 1}`,
+          status: 0
+        }];
       }
 
       // Test fast endpoint
       try {
+        const url = `${apiUrl}/api/v1/tariffs/fast`;
         const start = performance.now();
-        await fetch(`${apiUrl}/api/v1/tariffs/fast`, {
-          headers: headers
-        });
+        const response = await fetch(url, { headers });
         const time = performance.now() - start;
-        fastData = [...fastData, { time: time.toFixed(0), label: `Run ${i + 1}` }];
+
+        // Capturar headers de respuesta
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+
+        // Capturar body de respuesta
+        const responseBody = await response.json();
+
+        fastData = [...fastData, {
+          time: time.toFixed(0),
+          label: `Run ${i + 1}`,
+          status: response.status,
+          url,
+          requestHeaders: headers,
+          responseHeaders,
+          responseBody
+        }];
       } catch (e) {
-        fastData = [...fastData, { time: 'Error', label: `Run ${i + 1}` }];
+        fastData = [...fastData, {
+          time: 'Error',
+          label: `Run ${i + 1}`,
+          status: 0
+        }];
       }
 
       // Add delay between tests
@@ -54,8 +128,8 @@
     }
 
     // Calculate averages
-    const slowTimes = slowData.map(d => parseFloat(d.time)).filter(t => !isNaN(t));
-    const fastTimes = fastData.map(d => parseFloat(d.time)).filter(t => !isNaN(t));
+    const slowTimes = slowData.map(d => parseFloat(String(d.time))).filter(t => !isNaN(t));
+    const fastTimes = fastData.map(d => parseFloat(String(d.time))).filter(t => !isNaN(t));
 
     avgSlow = slowTimes.length > 0 ? Number((slowTimes.reduce((a, b) => a + b) / slowTimes.length).toFixed(0)) : 0;
     avgFast = fastTimes.length > 0 ? Number((fastTimes.reduce((a, b) => a + b) / fastTimes.length).toFixed(0)) : 0;
@@ -119,9 +193,27 @@
         <h3 class="font-semibold text-orange-400 mb-3">Slow Endpoint (Database)</h3>
         <div class="space-y-2">
           {#each slowData as result}
-            <div class="flex justify-between text-sm">
-              <span class="text-slate-400">{result.label}</span>
-              <span class="font-bold text-orange-400">{result.time}ms</span>
+            <div class="flex justify-between items-center text-sm p-2 rounded" style="background: rgba(0, 0, 0, 0.2);">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">{result.label}</span>
+                {#if result.status}
+                  <span class="status-badge-small" class:success={result.status === 200} class:error={result.status >= 400}>
+                    {result.status}
+                  </span>
+                {/if}
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-orange-400">{result.time}ms</span>
+                {#if result.status}
+                  <button
+                    class="details-button"
+                    on:click={() => openDetailsModal(result, 'slow')}
+                    title="Ver detalles"
+                  >
+                    🔍
+                  </button>
+                {/if}
+              </div>
             </div>
           {/each}
         </div>
@@ -136,9 +228,27 @@
         <h3 class="font-semibold text-green-400 mb-3">Fast Endpoint (Cached)</h3>
         <div class="space-y-2">
           {#each fastData as result}
-            <div class="flex justify-between text-sm">
-              <span class="text-slate-400">{result.label}</span>
-              <span class="font-bold text-green-400">{result.time}ms</span>
+            <div class="flex justify-between items-center text-sm p-2 rounded" style="background: rgba(0, 0, 0, 0.2);">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">{result.label}</span>
+                {#if result.status}
+                  <span class="status-badge-small" class:success={result.status === 200} class:error={result.status >= 400}>
+                    {result.status}
+                  </span>
+                {/if}
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-green-400">{result.time}ms</span>
+                {#if result.status}
+                  <button
+                    class="details-button"
+                    on:click={() => openDetailsModal(result, 'fast')}
+                    title="Ver detalles"
+                  >
+                    🔍
+                  </button>
+                {/if}
+              </div>
             </div>
           {/each}
         </div>
@@ -168,4 +278,53 @@
   {/if}
 </div>
 
-<style></style>
+<!-- Modal de detalles -->
+<RequestDetailModal
+  isOpen={isModalOpen}
+  onClose={closeModal}
+  requestDetails={selectedRequest}
+/>
+
+<style>
+  .status-badge-small {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+  }
+
+  .status-badge-small.success {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.5);
+  }
+
+  .status-badge-small.error {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+  }
+
+  .details-button {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .details-button:hover {
+    background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.6);
+    transform: scale(1.1);
+  }
+
+  .details-button:active {
+    transform: scale(0.95);
+  }
+</style>

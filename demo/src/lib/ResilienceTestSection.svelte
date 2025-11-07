@@ -1,5 +1,6 @@
 <script lang="ts">
 	import RequestLog from './RequestLog.svelte';
+	import RequestDetailModal from './RequestDetailModal.svelte';
 
 	interface RequestLogEntry {
 		id: string;
@@ -8,6 +9,11 @@
 		retryAfter?: number;
 		limit?: number;
 		remaining?: number;
+		url?: string;
+		requestHeaders?: Record<string, string>;
+		responseHeaders?: Record<string, string>;
+		responseBody?: any;
+		latency?: number;
 	}
 
 	interface TestState {
@@ -30,9 +36,34 @@
 		testCount: 0
 	});
 
+	let isModalOpen = false;
+	let selectedRequest: any = null;
+
+	function openDetailsModal(logEntry: RequestLogEntry) {
+		selectedRequest = {
+			url: logEntry.url || '',
+			method: 'GET',
+			requestHeaders: logEntry.requestHeaders || {},
+			responseHeaders: logEntry.responseHeaders || {},
+			responseBody: logEntry.responseBody || {},
+			status: logEntry.status,
+			latency: logEntry.latency
+		};
+		isModalOpen = true;
+	}
+
+	function closeModal() {
+		isModalOpen = false;
+		selectedRequest = null;
+	}
+
 	async function sendRequest(endpoint: 'slow' | 'fast', state: TestState) {
 		try {
-			const response = await fetch(`${apiUrl}/api/v1/tariffs/${endpoint}`);
+			const url = `${apiUrl}/api/v1/tariffs/${endpoint}`;
+			const start = performance.now();
+			const response = await fetch(url);
+			const latency = performance.now() - start;
+
 			const timestamp = new Date().toISOString();
 			const status = response.status;
 
@@ -40,13 +71,32 @@
 			const remaining = response.headers.get('ratelimit-remaining');
 			const retryAfter = response.headers.get('retry-after');
 
+			// Capturar todos los headers de respuesta
+			const responseHeaders: Record<string, string> = {};
+			response.headers.forEach((value, key) => {
+				responseHeaders[key] = value;
+			});
+
+			// Capturar body de respuesta
+			let responseBody: any = {};
+			try {
+				responseBody = await response.json();
+			} catch {
+				responseBody = { error: 'Could not parse response body' };
+			}
+
 			const entry: RequestLogEntry = {
 				id: `${Date.now()}-${Math.random()}`,
 				status,
 				timestamp,
 				retryAfter: retryAfter ? parseInt(retryAfter) : undefined,
 				limit: limit ? parseInt(limit) : undefined,
-				remaining: remaining ? parseInt(remaining) : undefined
+				remaining: remaining ? parseInt(remaining) : undefined,
+				url,
+				requestHeaders: {},
+				responseHeaders,
+				responseBody,
+				latency: Math.round(latency)
 			};
 
 			state.logs = [entry, ...state.logs];
@@ -154,6 +204,7 @@
 								retryAfter={log.retryAfter}
 								limit={log.limit}
 								remaining={log.remaining}
+								onShowDetails={() => openDetailsModal(log)}
 							/>
 						{/each}
 					</div>
@@ -218,6 +269,7 @@
 								retryAfter={log.retryAfter}
 								limit={log.limit}
 								remaining={log.remaining}
+								onShowDetails={() => openDetailsModal(log)}
 							/>
 						{/each}
 					</div>
@@ -226,6 +278,13 @@
 		</div>
 	</div>
 </section>
+
+<!-- Modal de detalles -->
+<RequestDetailModal
+	isOpen={isModalOpen}
+	onClose={closeModal}
+	requestDetails={selectedRequest}
+/>
 
 <style>
 	.resilience-section {

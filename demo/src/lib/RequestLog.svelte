@@ -5,9 +5,10 @@
 		retryAfter?: number;
 		limit?: number;
 		remaining?: number;
+		onShowDetails?: () => void;
 	}
 
-	let { status, timestamp, retryAfter, limit, remaining }: Props = $props();
+	let { status, timestamp, retryAfter, limit, remaining, onShowDetails }: Props = $props();
 
 	const isSuccess = status === 200;
 	const isRateLimited = status === 429;
@@ -54,6 +55,18 @@
 			</p>
 		{/if}
 	</div>
+
+	{#if onShowDetails}
+		<div class="log-actions">
+			<button
+				class="details-button"
+				onclick={onShowDetails}
+				title="Ver detalles completos"
+			>
+				🔍
+			</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -137,6 +150,38 @@
 	.rate-limit-info {
 	}
 
+	.log-actions {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+	}
+
+	.details-button {
+		background: rgba(59, 130, 246, 0.2);
+		border: 1px solid rgba(59, 130, 246, 0.4);
+		color: #60a5fa;
+		padding: 0.5rem;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		font-size: 1rem;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 36px;
+		height: 36px;
+	}
+
+	.details-button:hover {
+		background: rgba(59, 130, 246, 0.3);
+		border-color: rgba(59, 130, 246, 0.6);
+		transform: scale(1.1);
+	}
+
+	.details-button:active {
+		transform: scale(0.95);
+	}
+
 	@media (max-width: 640px) {
 		.request-log {
 			flex-direction: column;
@@ -146,6 +191,12 @@
 		.log-details {
 			grid-template-columns: 1fr;
 			width: 100%;
+		}
+
+		.log-actions {
+			width: 100%;
+			justify-content: center;
+			margin-top: 0.5rem;
 		}
 	}
 </style>
