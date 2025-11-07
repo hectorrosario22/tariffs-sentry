@@ -36,8 +36,8 @@
 		testCount: 0
 	});
 
-	let isModalOpen = false;
-	let selectedRequest: any = null;
+	let isModalOpen = $state(false);
+	let selectedRequest: any = $state(null);
 
 	function openDetailsModal(logEntry: RequestLogEntry) {
 		selectedRequest = {
