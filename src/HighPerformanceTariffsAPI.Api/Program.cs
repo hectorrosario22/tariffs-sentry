@@ -1,8 +1,9 @@
 using HighPerformanceTariffsAPI.Application.Services;
 using HighPerformanceTariffsAPI.Domain.Interfaces;
 using HighPerformanceTariffsAPI.Infrastructure.Caching;
+using HighPerformanceTariffsAPI.Infrastructure.Data;
 using HighPerformanceTariffsAPI.Infrastructure.Repositories;
-using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
 using System.Threading.RateLimiting;
@@ -96,9 +97,18 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// Register Infrastructure Services
-builder.Services.AddSingleton<ITariffRepository, MockTariffRepository>();
-builder.Services.AddSingleton<ITariffService, TariffService>();
+// Register DbContext with PostgreSQL
+var postgresConnection = builder.Configuration.GetConnectionString("PostgreSQL")
+    ?? throw new InvalidOperationException("PostgreSQL connection string not configured");
+
+builder.Services.AddDbContext<TariffsDbContext>(options =>
+{
+    options.UseNpgsql(postgresConnection);
+});
+
+// Register Infrastructure Services (Scoped for DbContext)
+builder.Services.AddScoped<ITariffRepository, TariffRepository>();
+builder.Services.AddScoped<ITariffService, TariffService>();
 
 // Configure Redis
 try
@@ -164,7 +174,12 @@ group.MapGet("/fast", GetTariffsFast)
     .RequireRateLimiting("PermissivePolicy")
     .WithOpenApi();
 
-app.Run();
+// This is a demo application, so we apply migrations at startup for convenience
+using var scope = app.Services.CreateScope();
+var dbContext = scope.ServiceProvider.GetRequiredService<TariffsDbContext>();
+await dbContext.Database.MigrateAsync();
+
+await app.RunAsync();
 
 // Endpoint handlers
 async Task<IResult> GetTariffsSlow(ITariffService service, int limit = 500, int offset = 0, CancellationToken ct = default)
