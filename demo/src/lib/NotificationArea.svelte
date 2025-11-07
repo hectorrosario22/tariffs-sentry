@@ -1,6 +1,5 @@
 <script>
-  export let message = '';
-  export let messageType = 'info'; // 'success', 'danger', 'info'
+  let { message = '', messageType = 'info' } = $props(); // 'success', 'danger', 'info'
 
   const bgColor = {
     success: 'bg-green-100 border-green-300 text-green-800',

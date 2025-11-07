@@ -11,13 +11,13 @@
     responseBody?: any;
   }
 
-  let slowData: TestResult[] = [];
-  let fastData: TestResult[] = [];
-  let avgSlow = 0;
-  let avgFast = 0;
-  let bypassKey = '';
-  let isModalOpen = false;
-  let selectedRequest: any = null;
+  let slowData: TestResult[] = $state([]);
+  let fastData: TestResult[] = $state([]);
+  let avgSlow = $state(0);
+  let avgFast = $state(0);
+  let bypassKey = $state('');
+  let isModalOpen = $state(false);
+  let selectedRequest: any = $state(null);
 
   // Get bypass key from environment variable
   const validBypassKey = import.meta.env.VITE_BYPASS_KEY || 'performance-test-bypass';

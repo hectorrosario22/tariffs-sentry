@@ -1,11 +1,11 @@
 <script>
   import MetricCard from './MetricCard.svelte';
 
-  let slowTime = '-';
-  let fastTime = '-';
-  let slowLoading = false;
-  let fastLoading = false;
-  let cacheHitRate = '0%';
+  let slowTime = $state('-');
+  let fastTime = $state('-');
+  let slowLoading = $state(false);
+  let fastLoading = $state(false);
+  let cacheHitRate = $state('0%');
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 

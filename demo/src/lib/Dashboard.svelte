@@ -6,8 +6,8 @@
   import ArchitectureInfo from './ArchitectureInfo.svelte';
   import NotificationArea from './NotificationArea.svelte';
 
-  let message = '';
-  let messageType = 'info';
+  let message = $state('');
+  let messageType = $state('info');
 
   function showNotification(text, type = 'info') {
     message = text;

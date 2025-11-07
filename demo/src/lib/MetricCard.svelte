@@ -1,10 +1,12 @@
 <script>
-  export let title = '';
-  export let value = '-';
-  export let label = '';
-  export let loading = false;
-  export let onTest = null;
-  export let color = 'from-blue-400 to-blue-600';
+  let {
+    title = '',
+    value = '-',
+    label = '',
+    loading = false,
+    onTest = null,
+    color = 'from-blue-400 to-blue-600'
+  } = $props();
 </script>
 
 <div class="card bg-gradient-to-br {color} text-white shadow-lg hover:shadow-xl transition-all hover:scale-105" style="transition: all 0.3s ease;">
