@@ -60,7 +60,7 @@
 		<div class="log-actions">
 			<button
 				class="details-button"
-				onclick={onShowDetails}
+				on:click={onShowDetails}
 				title="View full details"
 			>
 				🔍
