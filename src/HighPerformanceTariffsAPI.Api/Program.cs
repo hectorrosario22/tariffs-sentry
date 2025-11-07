@@ -2,6 +2,7 @@ using HighPerformanceTariffsAPI.Application.Services;
 using HighPerformanceTariffsAPI.Domain.Interfaces;
 using HighPerformanceTariffsAPI.Infrastructure.Caching;
 using HighPerformanceTariffsAPI.Infrastructure.Repositories;
+using Microsoft.AspNetCore.RateLimiting;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
 using System.Threading.RateLimiting;
@@ -20,18 +21,48 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add Rate Limiting
+// Add Rate Limiting with named policies
+var strictPolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:PermitLimit", 2);
+var strictPolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:WindowSeconds", 60);
+var permissivePolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:PermitLimit", 20);
+var permissivePolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:WindowSeconds", 60);
+
 builder.Services.AddRateLimiter(options =>
 {
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 100,
-                Window = TimeSpan.FromSeconds(60)
-            }));
+    options.AddFixedWindowLimiter(policyName: "StrictPolicy", rateLimitOptions =>
+    {
+        rateLimitOptions.PermitLimit = strictPolicyLimit;
+        rateLimitOptions.Window = TimeSpan.FromSeconds(strictPolicyWindow);
+        rateLimitOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        rateLimitOptions.AutoReplenishment = true;
+    });
+
+    options.AddFixedWindowLimiter(policyName: "PermissivePolicy", rateLimitOptions =>
+    {
+        rateLimitOptions.PermitLimit = permissivePolicyLimit;
+        rateLimitOptions.Window = TimeSpan.FromSeconds(permissivePolicyWindow);
+        rateLimitOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        rateLimitOptions.AutoReplenishment = true;
+    });
+
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterTimeSpan)
+            ? (int)retryAfterTimeSpan.TotalSeconds
+            : 60;
+
+        context.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
+
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Rate limit exceeded",
+            message = $"Too many requests. Retry after {retryAfter} seconds",
+            retryAfter,
+            timestamp = DateTime.UtcNow
+        }, cancellationToken);
+    };
 });
 
 // Register Infrastructure Services
@@ -90,12 +121,16 @@ group.MapGet("/slow", GetTariffsSlow)
     .WithName("GetTariffsSlow")
     .WithDescription("Simulates direct database read with artificial latency")
     .Produces(200)
+    .Produces(429)
+    .RequireRateLimiting("StrictPolicy")
     .WithOpenApi();
 
 group.MapGet("/fast", GetTariffsFast)
     .WithName("GetTariffsFast")
     .WithDescription("Optimized endpoint using distributed cache")
     .Produces(200)
+    .Produces(429)
+    .RequireRateLimiting("PermissivePolicy")
     .WithOpenApi();
 
 app.Run();

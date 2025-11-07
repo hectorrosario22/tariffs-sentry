@@ -1,6 +1,7 @@
 <script>
   import Header from './Header.svelte';
   import MetricsSection from './MetricsSection.svelte';
+  import ResilienceTestSection from './ResilienceTestSection.svelte';
   import PerformanceChart from './PerformanceChart.svelte';
   import ArchitectureInfo from './ArchitectureInfo.svelte';
   import NotificationArea from './NotificationArea.svelte';
@@ -27,6 +28,11 @@
   <div class="container mx-auto px-4 py-8">
     <!-- Metrics Section -->
     <MetricsSection on:notification={(e) => showNotification(e.detail.message, e.detail.type)} />
+
+    <!-- Resilience Test Section -->
+    <div class="mt-8">
+      <ResilienceTestSection />
+    </div>
 
     <!-- Performance Comparison Chart -->
     <div class="mt-8">

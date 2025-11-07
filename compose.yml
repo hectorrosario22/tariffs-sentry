@@ -45,6 +45,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5000
+      DOTNET_USE_POLLING_FILE_WATCHER: true
       ConnectionStrings__Redis: redis:6379
     ports:
       - "5000:5000"
