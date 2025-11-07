@@ -47,6 +47,7 @@ services:
       ASPNETCORE_URLS: http://+:5000
       DOTNET_USE_POLLING_FILE_WATCHER: true
       ConnectionStrings__Redis: redis:6379
+      RateLimiting__BypassKey: ${RATE_LIMIT_BYPASS_KEY:-performance-test-bypass}
     ports:
       - "5000:5000"
     depends_on:
@@ -63,6 +64,8 @@ services:
     build:
       context: ./demo
       dockerfile: Dockerfile
+      args:
+        VITE_BYPASS_KEY: ${RATE_LIMIT_BYPASS_KEY:-performance-test-bypass}
     container_name: tariffs-demo
     ports:
       - "3000:80"

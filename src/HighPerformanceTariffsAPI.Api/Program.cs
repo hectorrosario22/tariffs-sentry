@@ -21,28 +21,59 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add Rate Limiting with named policies
+// Add Rate Limiting with named policies and bypass support
 var strictPolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:PermitLimit", 2);
 var strictPolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:WindowSeconds", 60);
 var permissivePolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:PermitLimit", 20);
 var permissivePolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:WindowSeconds", 60);
+var bypassKey = builder.Configuration.GetValue<string>("RateLimiting:BypassKey") ?? "performance-test-bypass";
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter(policyName: "StrictPolicy", rateLimitOptions =>
+    // StrictPolicy with bypass support
+    options.AddPolicy("StrictPolicy", ctx =>
     {
-        rateLimitOptions.PermitLimit = strictPolicyLimit;
-        rateLimitOptions.Window = TimeSpan.FromSeconds(strictPolicyWindow);
-        rateLimitOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        rateLimitOptions.AutoReplenishment = true;
+        var bypassHeader = ctx.Request.Headers.TryGetValue("X-Bypass-RateLimit", out var headerValue)
+            ? headerValue.ToString()
+            : null;
+
+        if (!string.IsNullOrEmpty(bypassHeader) && bypassHeader == bypassKey)
+        {
+            return RateLimitPartition.GetNoLimiter("bypass");
+        }
+
+        var ipAddress = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            ipAddress, partition => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = strictPolicyLimit,
+                Window = TimeSpan.FromSeconds(strictPolicyWindow),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            });
     });
 
-    options.AddFixedWindowLimiter(policyName: "PermissivePolicy", rateLimitOptions =>
+    // PermissivePolicy with bypass support
+    options.AddPolicy("PermissivePolicy", ctx =>
     {
-        rateLimitOptions.PermitLimit = permissivePolicyLimit;
-        rateLimitOptions.Window = TimeSpan.FromSeconds(permissivePolicyWindow);
-        rateLimitOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        rateLimitOptions.AutoReplenishment = true;
+        var bypassHeader = ctx.Request.Headers.TryGetValue("X-Bypass-RateLimit", out var headerValue)
+            ? headerValue.ToString()
+            : null;
+
+        if (!string.IsNullOrEmpty(bypassHeader) && bypassHeader == bypassKey)
+        {
+            return RateLimitPartition.GetNoLimiter("bypass");
+        }
+
+        var ipAddress = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            ipAddress, partition => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permissivePolicyLimit,
+                Window = TimeSpan.FromSeconds(permissivePolicyWindow),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            });
     });
 
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

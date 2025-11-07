@@ -1,8 +1,16 @@
-<script>
+<script lang="ts">
   let slowData = [];
   let fastData = [];
   let avgSlow = 0;
   let avgFast = 0;
+  let bypassKey = '';
+
+  // Get bypass key from environment variable
+  const validBypassKey = import.meta.env.VITE_BYPASS_KEY || 'performance-test-bypass';
+
+  function fillBypassKey() {
+    bypassKey = validBypassKey;
+  }
 
   async function runPerformanceTest() {
     slowData = [];
@@ -11,11 +19,18 @@
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     const iterations = 5;
 
+    const headers: Record<string, string> = {};
+    if (bypassKey.trim()) {
+      headers['X-Bypass-RateLimit'] = bypassKey;
+    }
+
     for (let i = 0; i < iterations; i++) {
       // Test slow endpoint
       try {
         const start = performance.now();
-        await fetch(`${apiUrl}/api/v1/tariffs/slow`);
+        await fetch(`${apiUrl}/api/v1/tariffs/slow`, {
+          headers
+        });
         const time = performance.now() - start;
         slowData = [...slowData, { time: time.toFixed(0), label: `Run ${i + 1}` }];
       } catch (e) {
@@ -25,7 +40,9 @@
       // Test fast endpoint
       try {
         const start = performance.now();
-        await fetch(`${apiUrl}/api/v1/tariffs/fast`);
+        await fetch(`${apiUrl}/api/v1/tariffs/fast`, {
+          headers: headers
+        });
         const time = performance.now() - start;
         fastData = [...fastData, { time: time.toFixed(0), label: `Run ${i + 1}` }];
       } catch (e) {
@@ -40,8 +57,8 @@
     const slowTimes = slowData.map(d => parseFloat(d.time)).filter(t => !isNaN(t));
     const fastTimes = fastData.map(d => parseFloat(d.time)).filter(t => !isNaN(t));
 
-    avgSlow = slowTimes.length > 0 ? (slowTimes.reduce((a, b) => a + b) / slowTimes.length).toFixed(0) : 0;
-    avgFast = fastTimes.length > 0 ? (fastTimes.reduce((a, b) => a + b) / fastTimes.length).toFixed(0) : 0;
+    avgSlow = slowTimes.length > 0 ? Number((slowTimes.reduce((a, b) => a + b) / slowTimes.length).toFixed(0)) : 0;
+    avgFast = fastTimes.length > 0 ? Number((fastTimes.reduce((a, b) => a + b) / fastTimes.length).toFixed(0)) : 0;
   }
 </script>
 
@@ -54,6 +71,45 @@
     <button on:click={runPerformanceTest} class="btn-primary">
       🚀 Run Performance Test
     </button>
+  </div>
+
+  <!-- Bypass Key Section -->
+  <div class="mt-6 p-4 rounded-lg border border-slate-700" style="background: rgba(15, 23, 42, 0.5);">
+    <div class="flex flex-col gap-3">
+      <div>
+        <label for="bypassKey" class="text-sm font-semibold text-slate-300 block mb-2">
+          Clave de Bypass (Opcional)
+        </label>
+        <p class="text-xs text-slate-400 mb-3">
+          Usa el botón para autocompletar la clave correcta: <span class="font-mono text-blue-400">{validBypassKey}</span>
+        </p>
+        <div class="flex gap-2">
+          <input
+            id="bypassKey"
+            type="text"
+            bind:value={bypassKey}
+            placeholder="Ingresa la clave de bypass..."
+            class="flex-1 px-3 py-2 rounded-md bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          />
+          <button
+            on:click={fillBypassKey}
+            class="px-4 py-2 rounded-md font-semibold text-white transition-all"
+            style="background: linear-gradient(135deg, #22c55e, #16a34a); box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);"
+          >
+            Ingresar Clave
+          </button>
+        </div>
+      </div>
+      <div class="text-xs text-slate-400 pt-2 border-t border-slate-700">
+        {#if bypassKey.trim() === validBypassKey}
+          <span class="text-green-400">✓ Clave válida ingresada - las pruebas ejecutarán sin límites de rate limiting</span>
+        {:else if bypassKey.trim()}
+          <span class="text-orange-400">⚠ Clave inválida - las pruebas respetarán los límites de rate limiting</span>
+        {:else}
+          <span class="text-slate-400">Sin clave - las pruebas respetarán los límites de rate limiting</span>
+        {/if}
+      </div>
+    </div>
   </div>
 
   {#if slowData.length > 0}
