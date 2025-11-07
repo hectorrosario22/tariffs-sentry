@@ -37,20 +37,20 @@
 
 	<div class="log-details">
 		<p class="timestamp">
-			<span class="label">Tiempo:</span>
+			<span class="label">Time:</span>
 			<span class="value">{formatTime(timestamp)}</span>
 		</p>
 
 		{#if isRateLimited && retryAfter}
 			<p class="retry-after">
-				<span class="label">Reintentar después:</span>
+				<span class="label">Retry After:</span>
 				<span class="value">{retryAfter}s</span>
 			</p>
 		{/if}
 
 		{#if limit !== undefined && remaining !== undefined}
 			<p class="rate-limit-info">
-				<span class="label">Límite / Disponible:</span>
+				<span class="label">Limit / Remaining:</span>
 				<span class="value">{remaining}/{limit}</span>
 			</p>
 		{/if}
@@ -61,7 +61,7 @@
 			<button
 				class="details-button"
 				onclick={onShowDetails}
-				title="Ver detalles completos"
+				title="View full details"
 			>
 				🔍
 			</button>

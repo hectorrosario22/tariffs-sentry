@@ -142,21 +142,21 @@
 
 <section class="resilience-section">
 	<div class="section-header">
-		<h2>Pruebas de Resiliencia</h2>
-		<p class="subtitle">Prueba los límites de velocidad de los endpoints con diferentes políticas</p>
+		<h2>Resilience Testing</h2>
+		<p class="subtitle">Test endpoint rate limits with different policies</p>
 	</div>
 
 	<div class="test-grid">
 		<!-- Strict Policy Column -->
 		<div class="test-column">
 			<div class="column-header">
-				<h3>Política Estricta</h3>
+				<h3>Strict Policy</h3>
 				<span class="policy-badge strict">2 req/min</span>
 			</div>
 
 			<div class="endpoint-info">
 				<p class="endpoint-path">/api/v1/tariffs/slow</p>
-				<p class="description">Límite: 2 peticiones por minuto por IP</p>
+				<p class="description">Limit: 2 requests per minute per IP</p>
 			</div>
 
 			<div class="button-group">
@@ -165,7 +165,7 @@
 					onclick={() => singleRequest('slow', strictState)}
 					disabled={strictState.isAutoTesting}
 				>
-					Enviar Petición
+					Send Request
 				</button>
 
 				<button
@@ -173,7 +173,7 @@
 					class:active={strictState.isAutoTesting}
 					onclick={() => autoTest('slow', strictState)}
 				>
-					{strictState.isAutoTesting ? 'Deteniendo...' : 'Auto-Test (10x)'}
+					{strictState.isAutoTesting ? 'Stopping...' : 'Auto-Test (10x)'}
 				</button>
 
 				<button
@@ -181,19 +181,19 @@
 					onclick={() => clearLogs(strictState)}
 					disabled={strictState.logs.length === 0}
 				>
-					Limpiar
+					Clear
 				</button>
 			</div>
 
 			<div class="test-counter">
-				<span class="label">Peticiones realizadas:</span>
+				<span class="label">Requests sent:</span>
 				<span class="counter">{strictState.testCount}</span>
 			</div>
 
 			<div class="logs-container">
 				{#if strictState.logs.length === 0}
 					<div class="empty-state">
-						<p>Sin peticiones realizadas aún</p>
+						<p>No requests sent yet</p>
 					</div>
 				{:else}
 					<div class="logs-list">
@@ -215,13 +215,13 @@
 		<!-- Permissive Policy Column -->
 		<div class="test-column">
 			<div class="column-header">
-				<h3>Política Permisiva</h3>
+				<h3>Permissive Policy</h3>
 				<span class="policy-badge permissive">20 req/min</span>
 			</div>
 
 			<div class="endpoint-info">
 				<p class="endpoint-path">/api/v1/tariffs/fast</p>
-				<p class="description">Límite: 20 peticiones por minuto por IP</p>
+				<p class="description">Limit: 20 requests per minute per IP</p>
 			</div>
 
 			<div class="button-group">
@@ -230,7 +230,7 @@
 					onclick={() => singleRequest('fast', permissiveState)}
 					disabled={permissiveState.isAutoTesting}
 				>
-					Enviar Petición
+					Send Request
 				</button>
 
 				<button
@@ -238,7 +238,7 @@
 					class:active={permissiveState.isAutoTesting}
 					onclick={() => autoTest('fast', permissiveState)}
 				>
-					{permissiveState.isAutoTesting ? 'Deteniendo...' : 'Auto-Test (10x)'}
+					{permissiveState.isAutoTesting ? 'Stopping...' : 'Auto-Test (10x)'}
 				</button>
 
 				<button
@@ -246,19 +246,19 @@
 					onclick={() => clearLogs(permissiveState)}
 					disabled={permissiveState.logs.length === 0}
 				>
-					Limpiar
+					Clear
 				</button>
 			</div>
 
 			<div class="test-counter">
-				<span class="label">Peticiones realizadas:</span>
+				<span class="label">Requests sent:</span>
 				<span class="counter">{permissiveState.testCount}</span>
 			</div>
 
 			<div class="logs-container">
 				{#if permissiveState.logs.length === 0}
 					<div class="empty-state">
-						<p>Sin peticiones realizadas aún</p>
+						<p>No requests sent yet</p>
 					</div>
 				{:else}
 					<div class="logs-list">

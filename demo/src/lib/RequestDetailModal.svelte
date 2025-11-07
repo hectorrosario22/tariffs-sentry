@@ -54,7 +54,7 @@
 		<div class="modal-content" onclick={(e) => e.stopPropagation()}>
 			<div class="modal-header">
 				<div>
-					<h2 class="modal-title">Detalles de la Petición</h2>
+					<h2 class="modal-title">Request Details</h2>
 					<p class="modal-subtitle">
 						<span class="status-badge" class:success={requestDetails.status === 200} class:error={requestDetails.status >= 400}>
 							{requestDetails.status}
@@ -75,7 +75,7 @@
 			<div class="modal-body">
 				<!-- URL Section -->
 				<div class="section">
-					<h3 class="section-title">URL Solicitada</h3>
+					<h3 class="section-title">Requested URL</h3>
 					<div class="code-block">
 						<code>{requestDetails.method} {requestDetails.url}</code>
 					</div>
@@ -91,7 +91,7 @@
 								<span class="header-value">{value}</span>
 							</div>
 						{:else}
-							<p class="empty-message">No se enviaron headers adicionales</p>
+							<p class="empty-message">No additional headers sent</p>
 						{/each}
 					</div>
 				</div>
@@ -106,7 +106,7 @@
 								<span class="header-value">{value}</span>
 							</div>
 						{:else}
-							<p class="empty-message">No se recibieron headers</p>
+							<p class="empty-message">No response headers received</p>
 						{/each}
 					</div>
 				</div>
