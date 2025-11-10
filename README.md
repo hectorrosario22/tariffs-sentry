@@ -73,10 +73,16 @@ HighPerformanceTariffsAPI/
 │   │   └── Application.csproj
 │   │
 │   ├── HighPerformanceTariffsAPI.Infrastructure/   # Data access & caching
+│   │   ├── Data/
+│   │   │   └── TariffsDbContext.cs                 # EF Core DbContext
+│   │   ├── Migrations/
+│   │   │   ├── 20251107224156_InitialCreate.cs     # Initial schema
+│   │   │   ├── 20251107224156_InitialCreate.Designer.cs
+│   │   │   └── TariffsDbContextModelSnapshot.cs    # Current model
 │   │   ├── Caching/
 │   │   │   └── RedisCacheProvider.cs               # Redis wrapper
 │   │   ├── Repositories/
-│   │   │   └── MockTariffRepository.cs             # Mock data
+│   │   │   └── TariffRepository.cs                 # EF Core repository
 │   │   └── Infrastructure.csproj
 │   │
 │   └── HighPerformanceTariffsAPI.Api/              # Presentation layer
@@ -163,7 +169,7 @@ HighPerformanceTariffsAPI/
 | **API Framework** | .NET 9, ASP.NET Core | High-performance web framework |
 | **Language** | C# | Type-safe, modern language |
 | **Caching** | Redis 7 | Distributed cache store |
-| **Database** | PostgreSQL 16 | Data persistence (mockup only) |
+| **Database** | PostgreSQL 16 + Entity Framework Core 9.0 | Data persistence with automatic migrations |
 | **Frontend** | Svelte 5, Vite 7 | Reactive UI framework |
 | **Styling** | Tailwind CSS | Utility-first CSS framework |
 | **Package Manager** | pnpm | Fast, disk space efficient |
@@ -625,9 +631,11 @@ tariffs-sentry/
 | `src/HighPerformanceTariffsAPI.Domain/Entities/Tariff.cs` | Core entity representing a tariff record |
 | `src/HighPerformanceTariffsAPI.Domain/Interfaces/ITariffRepository.cs` | Contract for data access operations |
 | `src/HighPerformanceTariffsAPI.Application/Services/TariffService.cs` | Business logic for tariff operations |
-| `src/HighPerformanceTariffsAPI.Infrastructure/Repositories/MockTariffRepository.cs` | Mock data provider with 500 records |
+| `src/HighPerformanceTariffsAPI.Infrastructure/Data/TariffsDbContext.cs` | EF Core DbContext with seeding strategy |
+| `src/HighPerformanceTariffsAPI.Infrastructure/Repositories/TariffRepository.cs` | EF Core repository with PostgreSQL queries |
+| `src/HighPerformanceTariffsAPI.Infrastructure/Migrations/20251107224156_InitialCreate.cs` | Initial database schema migration |
 | `src/HighPerformanceTariffsAPI.Infrastructure/Caching/RedisCacheProvider.cs` | Redis cache wrapper |
-| `src/HighPerformanceTariffsAPI.Api/Program.cs` | API configuration, endpoints, middleware |
+| `src/HighPerformanceTariffsAPI.Api/Program.cs` | API configuration, endpoints, middleware, DB migrations |
 | `HighPerformanceTariffsAPI.sln` | Solution file that references all 4 projects |
 
 #### Frontend (Svelte + Vite)
@@ -668,7 +676,16 @@ tariffs-sentry/
 - **Depends on Domain layer only**
 
 #### Infrastructure Layer (External Services)
-- `MockTariffRepository` implementing `ITariffRepository` with 500 mock records
+- `TariffsDbContext` - Entity Framework Core DbContext with:
+  - PostgreSQL provider (Npgsql)
+  - Automatic seeding (500 records) via UseSeeding/UseAsyncSeeding
+  - Index on RegionCode for query optimization
+  - Precision configuration for decimal Rate field
+- `TariffRepository` implementing `ITariffRepository` with:
+  - Real database queries using EF Core
+  - AsNoTracking for read-only operations (performance optimization)
+  - Pagination support (Skip/Take)
+  - Scoped lifetime (required for DbContext)
 - `RedisCacheProvider` implementing `ICacheProvider` with StackExchange.Redis
 - **Depends on Domain layer** - Implements interfaces defined in Domain
 
@@ -729,6 +746,93 @@ Fast Endpoint:
 ```
 
 ## 💻 Development
+
+### Database Migrations & Seeding
+
+#### Migration Strategy
+```bash
+# Migrations run AUTOMATICALLY on application startup (Program.cs lines 168-170)
+# This is convenient for demos but NOT recommended for production
+
+# Manual migration commands (for development):
+cd /home/hrosario/Dev/tariffs-sentry
+
+# Add new migration
+dotnet ef migrations add MigrationName \
+  --project src/HighPerformanceTariffsAPI.Infrastructure \
+  --startup-project src/HighPerformanceTariffsAPI.Api
+
+# Apply migrations manually
+dotnet ef database update \
+  --project src/HighPerformanceTariffsAPI.Infrastructure \
+  --startup-project src/HighPerformanceTariffsAPI.Api
+
+# Remove last migration (if not applied)
+dotnet ef migrations remove \
+  --project src/HighPerformanceTariffsAPI.Infrastructure \
+  --startup-project src/HighPerformanceTariffsAPI.Api
+
+# Generate SQL script (for production deployment)
+dotnet ef migrations script \
+  --project src/HighPerformanceTariffsAPI.Infrastructure \
+  --startup-project src/HighPerformanceTariffsAPI.Api \
+  --output migration.sql
+```
+
+#### Seeding Strategy
+- **When:** Automatically after migrations (in `OnConfiguring` via `UseAsyncSeeding`)
+- **How:** Checks if Tariffs table is empty (`!await Tariffs.AnyAsync()`)
+- **What:** Inserts 500 tariff records with:
+  - Fixed seed (42) for reproducibility
+  - 10 regions (US-CA, US-TX, US-NY, US-FL, US-PA, EU-DE, EU-FR, EU-IT, EU-ES, AP-SG)
+  - Rates between 35-85 with random variation
+  - EffectiveDate: 2024-01-01
+  - CreatedAt/UpdatedAt timestamps
+- **Location:** `TariffsDbContext.GenerateSeedData()`
+
+#### Database Schema
+
+**Tariffs Table:**
+| Column | Type | Constraints |
+|--------|------|-------------|
+| Id | integer | PRIMARY KEY, IDENTITY |
+| RegionCode | varchar(10) | NOT NULL, INDEXED |
+| Rate | decimal(18,2) | NOT NULL |
+| EffectiveDate | date | NOT NULL |
+| CreatedAt | timestamp | NOT NULL |
+| UpdatedAt | timestamp | NULL |
+
+**Indexes:**
+- `PK_Tariffs` on Id (primary key)
+- `IX_Tariffs_RegionCode` on RegionCode (for efficient region filtering)
+
+#### Verify Database
+```bash
+# Connect to PostgreSQL container
+podman exec -it tariffs-postgres psql -U postgres -d tariffs
+
+# Verify tables
+\dt
+
+# Expected output:
+#            List of relations
+# Schema |       Name       | Type  |  Owner
+#--------+------------------+-------+----------
+# public | Tariffs          | table | postgres
+# public | __EFMigrationsHistory | table | postgres
+
+# Check record count
+SELECT COUNT(*) FROM "Tariffs";
+# Expected: 500
+
+# View sample data
+SELECT "Id", "RegionCode", "Rate", "EffectiveDate"
+FROM "Tariffs"
+LIMIT 10;
+
+# Exit psql
+\q
+```
 
 ### Running Tests
 ```bash
@@ -907,15 +1011,17 @@ demo:
 ## 🔄 Future Improvements
 
 ### Backend
-- [ ] Implement real database models
-- [ ] Add Entity Framework Core migrations
-- [ ] Implement repository pattern fully
+- [x] Implement real database models with PostgreSQL
+- [x] Add Entity Framework Core migrations
+- [x] Implement repository pattern with EF Core
 - [ ] Add unit and integration tests
+- [ ] Add structured logging with Serilog
 - [ ] Add request logging and correlation IDs
 - [ ] Implement circuit breaker pattern for external APIs
 - [ ] Add authentication and authorization (JWT)
 - [ ] Implement API versioning strategy
-- [ ] Add database connection pooling
+- [ ] Add database connection resilience (Polly retry policies)
+- [ ] Implement read/write separation (CQRS pattern)
 - [ ] Implement background job processing
 
 ### Frontend

@@ -22,7 +22,8 @@ This document contains complete instructions, guidelines, and context for AI ass
 - **Caching:** StackExchange.Redis (Redis 7)
 - **Rate Limiting:** Built-in AspNetCore.RateLimiting
 - **Documentation:** Scalar.AspNetCore (OpenAPI UI)
-- **Database:** PostgreSQL 16 (prepared for future use)
+- **Database:** PostgreSQL 16 with Entity Framework Core 9.0 + Npgsql
+- **Migrations:** Automatic on startup via `MigrateAsync()` + `UseAsyncSeeding`
 
 ### Frontend (Svelte + Vite)
 - **Framework:** Svelte 5.43.3
@@ -56,8 +57,16 @@ tariffs-sentry/
 │   │       ├── ITariffService.cs
 │   │       └── TariffService.cs
 │   ├── HighPerformanceTariffsAPI.Infrastructure/ # Infrastructure Layer
-│   │   ├── Repositories/MockTariffRepository.cs
-│   │   └── Caching/RedisCacheProvider.cs
+│   │   ├── Data/
+│   │   │   └── TariffsDbContext.cs              # EF Core DbContext with seeding
+│   │   ├── Migrations/
+│   │   │   ├── 20251107224156_InitialCreate.cs
+│   │   │   ├── 20251107224156_InitialCreate.Designer.cs
+│   │   │   └── TariffsDbContextModelSnapshot.cs
+│   │   ├── Repositories/
+│   │   │   └── TariffRepository.cs              # EF Core repository
+│   │   └── Caching/
+│   │       └── RedisCacheProvider.cs
 │   └── HighPerformanceTariffsAPI.Api/      # Presentation Layer (Minimal API)
 │       ├── Program.cs                      # Startup, DI, endpoints
 │       ├── Dockerfile                      # Multi-stage Docker build
@@ -115,19 +124,38 @@ Key principle: Contains use cases and business logic. Depends only on Domain lay
 **Location:** `src/HighPerformanceTariffsAPI.Infrastructure/`
 
 Contains external service integrations:
-- **MockTariffRepository.cs:**
-  - Generates 500 mock tariff records with fixed seed (42)
-  - Regions: US-CA, US-TX, US-NY, US-FL, US-PA, EU-DE, EU-FR, EU-IT, EU-ES, AP-SG
-  - Base rates from 35-85 with random variation
-  - Implements ITariffRepository interface
 
+#### Database (Entity Framework Core 9.0)
+- **TariffsDbContext.cs:**
+  - DbSet: `Tariffs`
+  - Provider: Npgsql.EntityFrameworkCore.PostgreSQL 9.0.2
+  - OnModelCreating: Configures entity (HasKey, MaxLength, Precision(18,2), Index on RegionCode)
+  - OnConfiguring: Implements `UseSeeding` + `UseAsyncSeeding`
+  - Seeding: Generates 500 records with fixed seed (42) for reproducibility
+  - Regions: US-CA, US-TX, US-NY, US-FL, US-PA, EU-DE, EU-FR, EU-IT, EU-ES, AP-SG
+  - Execution: Automatic after `MigrateAsync()`
+  - Verification: Only inserts if `!await Tariffs.AnyAsync()`
+
+- **TariffRepository.cs:**
+  - Implements ITariffRepository with EF Core
+  - GetAllAsync(limit, offset): AsNoTracking + OrderBy + Skip + Take
+  - GetByIdAsync(id): FirstOrDefaultAsync with AsNoTracking
+  - GetByRegionAsync(regionCode): Where + OrderBy with AsNoTracking
+  - GetTotalCountAsync(): CountAsync
+  - Lifetime: Scoped (required for DbContext)
+
+- **Migrations:**
+  - 20251107224156_InitialCreate: Creates Tariffs table + IX_Tariffs_RegionCode index
+  - TariffsDbContextModelSnapshot: Current model state for future migrations
+
+#### Caching (Redis)
 - **RedisCacheProvider.cs:**
   - Wraps StackExchange.Redis
   - Uses JSON serialization for cached objects
   - Silent error handling (returns null on failure)
   - Implements ICacheProvider interface
 
-Key principle: Implements interfaces defined in Domain layer. Handles external services (Redis, databases).
+Key principle: Implements interfaces defined in Domain layer. Handles external services (PostgreSQL, Redis).
 
 ### Presentation Layer (API)
 **Location:** `src/HighPerformanceTariffsAPI.Api/`
@@ -206,7 +234,7 @@ ConnectionStrings__Redis=redis:6379
 ASPNETCORE_ENVIRONMENT=Development
 ASPNETCORE_URLS=http://+:5000
 
-# Database (prepared for future use)
+# PostgreSQL Database (fully integrated)
 ConnectionStrings__PostgreSQL=Host=postgres;Port=5432;Database=tariffs;Username=postgres;Password=postgres
 ```
 
@@ -287,6 +315,158 @@ catch (Exception ex)
 {
     Console.WriteLine($"Warning: Redis connection failed: {ex.Message}");
     builder.Services.AddSingleton<ICacheProvider, NullCacheProvider>();
+}
+```
+
+### Database Development
+
+#### DbContext Registration
+```csharp
+// Program.cs lines 101-107
+var postgresConnection = builder.Configuration.GetConnectionString("PostgreSQL")
+    ?? throw new InvalidOperationException("PostgreSQL connection string not configured");
+
+builder.Services.AddDbContext<TariffsDbContext>(options =>
+{
+    options.UseNpgsql(postgresConnection);
+});
+
+// Services must be Scoped (not Singleton) when using DbContext
+builder.Services.AddScoped<ITariffRepository, TariffRepository>();
+builder.Services.AddScoped<ITariffService, TariffService>();
+```
+
+#### Migration Workflow
+
+**Creating Migrations:**
+```bash
+# Navigate to Infrastructure project
+cd src/HighPerformanceTariffsAPI.Infrastructure
+
+# Add new migration
+dotnet ef migrations add MigrationName --startup-project ../HighPerformanceTariffsAPI.Api
+
+# Review generated migration files in Migrations/
+# - YYYYMMDDHHMMSS_MigrationName.cs (Up/Down methods)
+# - YYYYMMDDHHMMSS_MigrationName.Designer.cs (metadata)
+# - TariffsDbContextModelSnapshot.cs (updated)
+```
+
+**Applying Migrations:**
+```bash
+# Automatic (current setup - runs on startup)
+# Program.cs lines 168-170:
+using var scope = app.Services.CreateScope();
+var dbContext = scope.ServiceProvider.GetRequiredService<TariffsDbContext>();
+await dbContext.Database.MigrateAsync();
+
+# Manual (recommended for production)
+dotnet ef database update --startup-project ../HighPerformanceTariffsAPI.Api
+
+# Rollback to specific migration
+dotnet ef database update PreviousMigrationName --startup-project ../HighPerformanceTariffsAPI.Api
+
+# Generate SQL script (for production deployment)
+dotnet ef migrations script --startup-project ../HighPerformanceTariffsAPI.Api > migration.sql
+```
+
+**Removing Migrations:**
+```bash
+# Remove last migration (only if not applied to database)
+dotnet ef migrations remove --startup-project ../HighPerformanceTariffsAPI.Api
+```
+
+#### Seeding Strategy
+
+**Current Implementation (UseAsyncSeeding in OnConfiguring):**
+```csharp
+protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+{
+    optionsBuilder
+        .UseSeeding((context, _) => { /* sync seeding */ })
+        .UseAsyncSeeding(async (context, _, cancellationToken) =>
+        {
+            var tariffsDbContext = (TariffsDbContext)context;
+            if (!await tariffsDbContext.Tariffs.AnyAsync(cancellationToken))
+            {
+                var tariffs = GenerateSeedData();
+                tariffsDbContext.Tariffs.AddRange(tariffs);
+                await tariffsDbContext.SaveChangesAsync(cancellationToken);
+            }
+        });
+}
+```
+
+**Execution Flow:**
+1. `MigrateAsync()` applies pending migrations
+2. EF Core calls `OnConfiguring` hooks
+3. `UseAsyncSeeding` checks if table is empty
+4. If empty: generates and inserts 500 records
+5. If not empty: skips seeding
+
+**Alternative Patterns (for production):**
+- Separate seeding logic (run once via CLI command)
+- Use `HasData` in OnModelCreating for static reference data
+- Implement custom database initializer
+- Use migration-based seeding for versioned data
+
+#### Database Queries
+
+**Query Patterns:**
+```csharp
+// Read-only queries (use AsNoTracking for performance)
+public async Task<IEnumerable<Tariff>> GetAllAsync(int limit, int offset)
+{
+    return await _context.Tariffs
+        .AsNoTracking()           // No change tracking overhead
+        .OrderBy(t => t.Id)       // Consistent ordering
+        .Skip(offset)             // Pagination
+        .Take(limit)              // Limit results
+        .ToListAsync();           // Execute async
+}
+
+// Single entity query
+public async Task<Tariff?> GetByIdAsync(int id)
+{
+    return await _context.Tariffs
+        .AsNoTracking()
+        .FirstOrDefaultAsync(t => t.Id == id);
+}
+
+// Filtered query with index usage
+public async Task<IEnumerable<Tariff>> GetByRegionAsync(string regionCode)
+{
+    return await _context.Tariffs
+        .AsNoTracking()
+        .Where(t => t.RegionCode == regionCode)  // Uses IX_Tariffs_RegionCode
+        .OrderBy(t => t.Id)
+        .ToListAsync();
+}
+```
+
+#### Connection String Format
+
+**appsettings.json:**
+```json
+{
+  "ConnectionStrings": {
+    "PostgreSQL": "Host=postgres;Port=5432;Database=tariffs;Username=postgres;Password=postgres"
+  }
+}
+```
+
+**compose.yml (environment override):**
+```yaml
+environment:
+  ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=tariffs;Username=postgres;Password=postgres
+```
+
+**Local development (appsettings.Development.json):**
+```json
+{
+  "ConnectionStrings": {
+    "PostgreSQL": "Host=localhost;Port=5432;Database=tariffs;Username=postgres;Password=postgres"
+  }
 }
 ```
 
@@ -552,14 +732,14 @@ COPY ["HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj", "src
 **Always Escalate To User:**
 - Security vulnerability decisions
 - Architecture overhauls
-- Database schema changes (before PostgreSQL integration)
+- Database schema changes
 - Sensitive configuration changes
 - Performance trade-offs requiring business decisions
 
 ### Limitations
 
 **Current Constraints:**
-- No real database yet (using mock data)
+- Database migrations run automatically on startup (not ideal for production)
 - No user authentication/authorization
 - No unit/integration tests implemented
 - No CI/CD pipeline
@@ -567,10 +747,12 @@ COPY ["HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj", "src
 - Limited error logging (Console.WriteLine only)
 
 **Future Requirements:**
-- PostgreSQL integration for real tariff data
+- Production-ready migration strategy (separate from startup)
 - Unit and integration tests
 - Structured logging (Serilog)
 - Authentication middleware
+- Database connection resilience (Polly retry policies)
+- Read/write separation (CQRS pattern)
 - Advanced performance monitoring
 - Load testing tools
 
@@ -580,24 +762,29 @@ COPY ["HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj", "src
 ✅ Clean Architecture 4-layer implementation
 ✅ .NET 9 Minimal API with Scalar documentation
 ✅ Redis distributed caching with fallback pattern
-✅ Rate limiting (IP-based, 100 req/60s)
+✅ Rate limiting (IP-based, configurable policies)
 ✅ Svelte 5 + Vite 7 + Tailwind CSS frontend
 ✅ Docker/Podman multi-service orchestration
 ✅ Comprehensive documentation
 ✅ Git version control with atomic commits
 ✅ Portfolio-grade code quality
+✅ PostgreSQL 16 integration with Entity Framework Core 9.0
+✅ Automatic database migrations on startup
+✅ Database seeding with 500 realistic tariff records
+✅ EF Core repository pattern with AsNoTracking optimization
 
 ### In Progress
-⏳ PostgreSQL integration for real data
 ⏳ Unit test coverage
 ⏳ Integration tests
 
 ### Future Enhancements
+⏳ Production-ready migration strategy (separate from startup)
+⏳ Database connection resilience (Polly retry policies)
+⏳ Read/write separation (CQRS pattern)
 ⏳ CI/CD pipeline (GitHub Actions)
 ⏳ Structured logging (Serilog)
 ⏳ Advanced monitoring and telemetry
 ⏳ API versioning strategy
-⏳ Database migrations
 ⏳ Load testing framework
 ⏳ Kubernetes deployment manifests
 
