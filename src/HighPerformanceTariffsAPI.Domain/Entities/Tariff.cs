@@ -1,7 +1,7 @@
 ﻿namespace HighPerformanceTariffsAPI.Domain.Entities;
 
 /// <summary>
-/// Represents a tariff record with pricing information for a specific region.
+/// Represents a tariff record with exchange rate information for a specific currency.
 /// </summary>
 public class Tariff
 {
@@ -11,12 +11,13 @@ public class Tariff
     public int Id { get; set; }
 
     /// <summary>
-    /// Regional code (e.g., "US-CA", "US-TX", "EU-DE").
+    /// Currency code in ISO 4217 format (e.g., "USD", "EUR", "GBP", "JPY").
+    /// Note: Field name is RegionCode for backward compatibility, but stores currency codes.
     /// </summary>
     public string RegionCode { get; set; } = string.Empty;
 
     /// <summary>
-    /// Tariff rate in decimal format.
+    /// Exchange rate relative to the base currency (typically EUR).
     /// </summary>
     public decimal Rate { get; set; }
 
