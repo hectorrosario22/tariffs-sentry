@@ -6,14 +6,9 @@ namespace HighPerformanceTariffsAPI.Application.Services;
 /// <summary>
 /// Service for tariff operations with direct database access (simulated).
 /// </summary>
-public class TariffService : ITariffService
+public class TariffService(
+    ITariffRepository repository, ICacheProvider cacheProvider) : ITariffService
 {
-    private readonly ITariffRepository _repository;
-
-    public TariffService(ITariffRepository repository)
-    {
-        _repository = repository;
-    }
 
     /// <summary>
     /// Retrieves tariffs directly from the repository with artificial delay.
@@ -23,12 +18,12 @@ public class TariffService : ITariffService
         // Simulate database latency
         await Task.Delay(300, cancellationToken);
 
-        var tariffs = await _repository.GetAllAsync(limit, offset, cancellationToken);
-        var total = await _repository.GetTotalCountAsync(cancellationToken);
+        var tariffs = await repository.GetAllAsync(limit, offset, cancellationToken);
+        var total = await repository.GetTotalCountAsync(cancellationToken);
 
         return new TariffsResponseDto
         {
-            Data = MapToDto(tariffs),
+            Data = MapToDto(tariffs).ToList(),
             Total = total,
             Timestamp = DateTime.UtcNow,
             FromCache = false
@@ -36,21 +31,39 @@ public class TariffService : ITariffService
     }
 
     /// <summary>
-    /// Retrieves tariffs from cache when available.
+    /// Retrieves tariffs from cache when available, using Cache-Aside pattern.
     /// </summary>
     public async Task<TariffsResponseDto> GetTariffsCachedAsync(int limit = 500, int offset = 0, CancellationToken cancellationToken = default)
     {
-        var tariffs = await _repository.GetAllAsync(limit, offset, cancellationToken);
-        var total = await _repository.GetTotalCountAsync(cancellationToken);
+        // 1. Generate cache key based on pagination parameters
+        var cacheKey = $"tariffs:all:{limit}:{offset}";
 
-        return new TariffsResponseDto
+        // 2. Try to get data from cache (Cache Hit scenario)
+        var cachedData = await cacheProvider.GetAsync<TariffsResponseDto>(cacheKey, cancellationToken);
+        if (cachedData != null)
+        {
+            cachedData.FromCache = true;
+            cachedData.Timestamp = DateTime.UtcNow;
+            return cachedData;
+        }
+
+        // 3. Cache Miss: query database
+        var tariffs = await repository.GetAllAsync(limit, offset, cancellationToken);
+        var total = await repository.GetTotalCountAsync(cancellationToken);
+
+        // 4. Build response object
+        var response = new TariffsResponseDto
         {
             Data = MapToDto(tariffs),
             Total = total,
             Timestamp = DateTime.UtcNow,
-            FromCache = true,
-            CachedAt = DateTime.UtcNow.AddMinutes(-1) // Simulate cache age
+            FromCache = false,
+            CachedAt = DateTime.UtcNow
         };
+
+        // 5. Store in Redis cache with 5-minute TTL
+        await cacheProvider.SetAsync(cacheKey, response, TimeSpan.FromMinutes(5), cancellationToken);
+        return response;
     }
 
     private static IEnumerable<TariffDto> MapToDto(IEnumerable<Domain.Entities.Tariff> tariffs)
