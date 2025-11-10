@@ -5,7 +5,9 @@ using HighPerformanceTariffsAPI.Infrastructure.Data;
 using HighPerformanceTariffsAPI.Infrastructure.ExternalApis;
 using HighPerformanceTariffsAPI.Infrastructure.Repositories;
 using HighPerformanceTariffsAPI.Infrastructure.Services;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using HealthChecks.UI.Client;
 using Refit;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
@@ -24,6 +26,17 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader();
     });
 });
+
+// Add Health Checks
+builder.Services.AddHealthChecks()
+    .AddNpgSql(builder.Configuration.GetConnectionString("PostgreSQL")!,
+        name: "PostgreSQL DB",
+        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+        tags: new[] { "db", "postgresql" })
+    .AddRedis(builder.Configuration.GetConnectionString("Redis")!,
+        name: "Redis Cache",
+        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+        tags: new[] { "cache", "redis" });
 
 // Add Rate Limiting with named policies and bypass support
 var strictPolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:PermitLimit", 2);
@@ -163,10 +176,10 @@ app.MapScalarApiReference("/", options =>
 });
 
 // Health check endpoint
-app.MapGet("/health", () => new { status = "healthy", timestamp = DateTime.UtcNow })
-    .WithName("HealthCheck")
-    .WithOpenApi()
-    .Produces(200);
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+});
 
 // Tariffs API endpoints (v1)
 var group = app.MapGroup("/api/v1/tariffs")
