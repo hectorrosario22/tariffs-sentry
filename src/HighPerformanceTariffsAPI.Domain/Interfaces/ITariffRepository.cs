@@ -8,12 +8,12 @@ namespace HighPerformanceTariffsAPI.Domain.Interfaces;
 public interface ITariffRepository
 {
     /// <summary>
-    /// Retrieves all tariff records with pagination support.
+    /// Retrieves all active tariff records with pagination support.
     /// </summary>
     /// <param name="limit">Maximum number of records to return</param>
     /// <param name="offset">Number of records to skip</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Collection of tariff records</returns>
+    /// <returns>Collection of active tariff records</returns>
     Task<IEnumerable<Tariff>> GetAllAsync(int limit = 500, int offset = 0, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -25,17 +25,17 @@ public interface ITariffRepository
     Task<Tariff?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Retrieves tariff records by region code.
+    /// Retrieves active tariff records by base currency code.
     /// </summary>
-    /// <param name="regionCode">Region code</param>
+    /// <param name="baseCurrency">Base currency code (e.g., "USD", "EUR")</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Collection of tariffs for the region</returns>
-    Task<IEnumerable<Tariff>> GetByRegionAsync(string regionCode, CancellationToken cancellationToken = default);
+    /// <returns>Collection of active tariffs for the base currency</returns>
+    Task<IEnumerable<Tariff>> GetByBaseCurrencyAsync(string baseCurrency, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the total count of tariff records.
+    /// Gets the total count of active tariff records.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Total count</returns>
+    /// <returns>Total count of active records</returns>
     Task<int> GetTotalCountAsync(CancellationToken cancellationToken = default);
 }

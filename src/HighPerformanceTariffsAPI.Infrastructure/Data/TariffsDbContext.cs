@@ -33,16 +33,24 @@ public class TariffsDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
 
-            entity.Property(e => e.RegionCode)
+            entity.Property(e => e.BaseCurrency)
+                .IsRequired()
+                .HasMaxLength(10);
+
+            entity.Property(e => e.TargetCurrency)
                 .IsRequired()
                 .HasMaxLength(10);
 
             entity.Property(e => e.Rate)
                 .IsRequired()
-                .HasPrecision(18, 2);
+                .HasPrecision(18, 6);
 
             entity.Property(e => e.EffectiveDate)
                 .IsRequired();
+
+            entity.Property(e => e.IsActive)
+                .IsRequired()
+                .HasDefaultValue(true);
 
             entity.Property(e => e.CreatedAt)
                 .IsRequired();
@@ -50,9 +58,21 @@ public class TariffsDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .IsRequired(false);
 
-            // Index for efficient region-based queries
-            entity.HasIndex(e => e.RegionCode)
-                .HasDatabaseName("IX_Tariffs_RegionCode");
+            // Index for efficient base currency filtering
+            entity.HasIndex(e => e.BaseCurrency)
+                .HasDatabaseName("IX_Tariffs_BaseCurrency");
+
+            // Index for efficient active record filtering
+            entity.HasIndex(e => e.IsActive)
+                .HasDatabaseName("IX_Tariffs_IsActive");
+
+            // Composite index for common query pattern (active records by base currency)
+            entity.HasIndex(e => new { e.BaseCurrency, e.IsActive })
+                .HasDatabaseName("IX_Tariffs_BaseCurrency_IsActive");
+
+            // Composite index for efficient date-based queries
+            entity.HasIndex(e => new { e.EffectiveDate, e.IsActive })
+                .HasDatabaseName("IX_Tariffs_EffectiveDate_IsActive");
         });
     }
 }

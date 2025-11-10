@@ -1,5 +1,5 @@
 services:
-  # PostgreSQL Database (fully integrated with Entity Framework Core)
+  # PostgreSQL Database (shared by Tariffs API and Frankfurter API)
   postgres:
     image: docker.io/library/postgres:16-alpine
     container_name: tariffs-postgres
@@ -40,8 +40,6 @@ services:
   frankfurter:
     image: docker.io/lineofflight/frankfurter:latest
     container_name: tariffs-frankfurter
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tariffs
     ports:
       - "8080:8080"
     depends_on:

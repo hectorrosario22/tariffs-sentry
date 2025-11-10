@@ -196,15 +196,15 @@ await dbContext.Database.MigrateAsync();
 await app.RunAsync();
 
 // Endpoint handlers
-async Task<IResult> GetTariffsSlow(ITariffService service, int limit = 500, int offset = 0, CancellationToken ct = default)
+async Task<IResult> GetTariffsSlow(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
 {
-    var result = await service.GetTariffsSlowAsync(limit, offset, ct);
+    var result = await service.GetTariffsSlowAsync(@base, limit, offset, ct);
     return Results.Ok(result);
 }
 
-async Task<IResult> GetTariffsFast(ITariffService service, int limit = 500, int offset = 0, CancellationToken ct = default)
+async Task<IResult> GetTariffsFast(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
 {
-    var result = await service.GetTariffsCachedAsync(limit, offset, ct);
+    var result = await service.GetTariffsCachedAsync(@base, limit, offset, ct);
     return Results.Ok(result);
 }
 

@@ -71,75 +71,111 @@ public class TariffSyncService(
             using var scope = scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<TariffsDbContext>();
 
-            // Check if we already have data for today
+            // Check if we already have active data for today
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var hasDataForToday = await dbContext.Tariffs
-                .AnyAsync(t => t.EffectiveDate == today, cancellationToken);
+            var hasActiveDataForToday = await dbContext.Tariffs
+                .AnyAsync(t => t.EffectiveDate == today && t.IsActive, cancellationToken);
 
-            if (hasDataForToday)
+            if (hasActiveDataForToday)
             {
-                logger.LogInformation("Tariffs already synced for {Date}. Skipping synchronization", today);
+                logger.LogInformation("Active tariffs already synced for {Date}. Skipping synchronization", today);
                 return;
             }
 
-            // Fetch latest rates from Frankfurter API
-            logger.LogInformation("Fetching latest rates from Frankfurter API");
-            var response = await frankfurterClient.GetLatestRatesAsync(cancellationToken);
+            // Step 1: Fetch all available currencies
+            logger.LogInformation("Fetching available currencies from Frankfurter API");
+            var currencies = await frankfurterClient.GetCurrenciesAsync(cancellationToken);
 
-            if (response?.Rates == null || response.Rates.Count == 0)
+            if (currencies == null || currencies.Count == 0)
             {
-                logger.LogWarning("No rates returned from Frankfurter API");
+                logger.LogWarning("No currencies returned from Frankfurter API");
                 return;
             }
 
-            // Map response to Tariff entities
-            var effectiveDate = DateOnly.Parse(response.Date);
-            var tariffs = new List<Tariff>();
+            var currencyCodes = currencies.Keys.ToList();
+            logger.LogInformation("Found {Count} currencies to process", currencyCodes.Count);
 
-            // Add all currency rates from the response
-            foreach (var rate in response.Rates)
+            // Step 2: Deactivate all previous active tariffs (to maintain history)
+            logger.LogInformation("Deactivating previous active tariff records");
+            var previousActiveTariffs = await dbContext.Tariffs
+                .Where(t => t.IsActive)
+                .ToListAsync(cancellationToken);
+
+            foreach (var tariff in previousActiveTariffs)
             {
-                tariffs.Add(new Tariff
+                tariff.IsActive = false;
+                tariff.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Deactivated {Count} previous tariff records", previousActiveTariffs.Count);
+
+            // Step 3: Fetch rates for each currency and build complete currency pair matrix
+            var allTariffs = new List<Tariff>();
+            var effectiveDate = DateOnly.FromDateTime(DateTime.UtcNow);
+            var processedCount = 0;
+
+            foreach (var baseCurrency in currencyCodes)
+            {
+                try
                 {
-                    RegionCode = rate.Key, // Currency code (USD, GBP, JPY, etc.)
-                    Rate = rate.Value,
-                    EffectiveDate = effectiveDate,
-                    CreatedAt = DateTime.UtcNow
-                });
+                    logger.LogInformation("Fetching rates for base currency: {BaseCurrency} ({Current}/{Total})",
+                        baseCurrency, ++processedCount, currencyCodes.Count);
+
+                    var response = await frankfurterClient.GetLatestRatesWithBaseAsync(baseCurrency, cancellationToken);
+
+                    if (response?.Rates == null || response.Rates.Count == 0)
+                    {
+                        logger.LogWarning("No rates returned for base currency {BaseCurrency}", baseCurrency);
+                        continue;
+                    }
+
+                    // Add all target currencies for this base
+                    foreach (var rate in response.Rates)
+                    {
+                        allTariffs.Add(new Tariff
+                        {
+                            BaseCurrency = baseCurrency,
+                            TargetCurrency = rate.Key,
+                            Rate = rate.Value,
+                            EffectiveDate = effectiveDate,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    // Small delay to avoid rate limiting
+                    await Task.Delay(100, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error fetching rates for base currency {BaseCurrency}", baseCurrency);
+                }
             }
 
-            // Also include the base currency with rate 1.0
-            tariffs.Add(new Tariff
-            {
-                RegionCode = response.Base, // EUR
-                Rate = 1.0m,
-                EffectiveDate = effectiveDate,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            // Remove duplicates (in case base currency is also in rates)
-            var uniqueTariffs = tariffs
-                .GroupBy(t => new { t.RegionCode, t.EffectiveDate })
+            // Step 4: Remove duplicates
+            var uniqueTariffs = allTariffs
+                .GroupBy(t => new { t.BaseCurrency, t.TargetCurrency, t.EffectiveDate })
                 .Select(g => g.First())
                 .ToList();
 
-            logger.LogInformation("Inserting {Count} unique tariff records into database (removed {Duplicates} duplicates)",
+            logger.LogInformation("Inserting {Count} unique tariff records (removed {Duplicates} duplicates)",
                 uniqueTariffs.Count,
-                tariffs.Count - uniqueTariffs.Count);
+                allTariffs.Count - uniqueTariffs.Count);
 
-            // Insert into database
+            // Step 5: Insert into database
             await dbContext.Tariffs.AddRangeAsync(uniqueTariffs, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            // Invalidate cache using pattern matching
+            // Step 6: Invalidate cache using pattern matching
             logger.LogInformation("Invalidating cache with pattern 'tariffs:all:*'");
             await cacheProvider.RemoveByPatternAsync("tariffs:all:*", cancellationToken);
 
             logger.LogInformation(
-                "Successfully synchronized {Count} tariffs for date {Date}. Base currency: {Base}",
+                "Successfully synchronized {Count} tariff records for date {Date} across {CurrencyCount} currencies",
                 uniqueTariffs.Count,
-                response.Date,
-                response.Base);
+                effectiveDate,
+                currencyCodes.Count);
         }
         catch (Exception ex)
         {
