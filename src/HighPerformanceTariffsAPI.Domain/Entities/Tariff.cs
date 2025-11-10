@@ -1,7 +1,8 @@
 ﻿namespace HighPerformanceTariffsAPI.Domain.Entities;
 
 /// <summary>
-/// Represents a tariff record with pricing information for a specific region.
+/// Represents a currency pair exchange rate record.
+/// Each record stores the exchange rate from one currency (base) to another (target).
 /// </summary>
 public class Tariff
 {
@@ -11,12 +12,20 @@ public class Tariff
     public int Id { get; set; }
 
     /// <summary>
-    /// Regional code (e.g., "US-CA", "US-TX", "EU-DE").
+    /// Base currency code in ISO 4217 format (e.g., "USD", "EUR", "GBP", "JPY").
+    /// This is the currency from which the exchange rate is calculated.
     /// </summary>
-    public string RegionCode { get; set; } = string.Empty;
+    public string BaseCurrency { get; set; } = string.Empty;
 
     /// <summary>
-    /// Tariff rate in decimal format.
+    /// Target currency code in ISO 4217 format (e.g., "USD", "EUR", "GBP", "JPY").
+    /// This is the currency to which the exchange rate is calculated.
+    /// </summary>
+    public string TargetCurrency { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Exchange rate from base currency to target currency.
+    /// For example, if BaseCurrency=EUR and TargetCurrency=USD, Rate=1.1571 means 1 EUR = 1.1571 USD.
     /// </summary>
     public decimal Rate { get; set; }
 
@@ -24,6 +33,13 @@ public class Tariff
     /// Date when the tariff becomes effective.
     /// </summary>
     public DateOnly EffectiveDate { get; set; }
+
+    /// <summary>
+    /// Indicates whether this tariff record is currently active.
+    /// Only active records should be returned by the API.
+    /// Historical records are marked as inactive for data retention.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
 
     /// <summary>
     /// Timestamp of record creation.

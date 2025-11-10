@@ -38,4 +38,11 @@ public interface ICacheProvider
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if key exists, false otherwise</returns>
     Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes all keys matching a pattern (e.g., "tariffs:all:*").
+    /// </summary>
+    /// <param name="pattern">Key pattern with wildcard support</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default);
 }

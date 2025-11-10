@@ -1,5 +1,5 @@
 services:
-  # PostgreSQL Database (fully integrated with Entity Framework Core)
+  # PostgreSQL Database (shared by Tariffs API and Frankfurter API)
   postgres:
     image: docker.io/library/postgres:16-alpine
     container_name: tariffs-postgres
@@ -36,6 +36,26 @@ services:
     networks:
       - tariffs-network
 
+  # Frankfurter Exchange Rates API
+  frankfurter:
+    image: docker.io/lineofflight/frankfurter:latest
+    container_name: tariffs-frankfurter
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/latest"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      start_interval: 10s
+    networks:
+      - tariffs-network
+    restart: unless-stopped
+
   # .NET API
   api:
     build:
@@ -49,12 +69,15 @@ services:
       ConnectionStrings__Redis: redis:6379
       ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=tariffs;Username=postgres;Password=postgres
       RateLimiting__BypassKey: ${RATE_LIMIT_BYPASS_KEY:-performance-test-bypass}
+      ExternalApis__FrankfurterBaseUrl: ${FRANKFURTER_BASE_URL:-http://frankfurter:8080}
     ports:
       - "5000:5000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      frankfurter:
         condition: service_healthy
     networks:
       - tariffs-network

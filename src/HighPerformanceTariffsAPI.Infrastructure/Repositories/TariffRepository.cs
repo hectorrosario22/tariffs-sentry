@@ -22,17 +22,19 @@ public class TariffRepository : ITariffRepository
     }
 
     /// <summary>
-    /// Retrieves all tariffs with optional pagination.
+    /// Retrieves all active tariffs with optional pagination and base currency filter.
     /// </summary>
     /// <param name="limit">The maximum number of records to return (default: 500).</param>
     /// <param name="offset">The number of records to skip (default: 0).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A collection of tariff entities.</returns>
+    /// <returns>A collection of active tariff entities.</returns>
     public async Task<IEnumerable<Tariff>> GetAllAsync(int limit = 500, int offset = 0, CancellationToken cancellationToken = default)
     {
         return await _context.Tariffs
             .AsNoTracking()
-            .OrderBy(t => t.Id)
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.BaseCurrency)
+            .ThenBy(t => t.TargetCurrency)
             .Skip(offset)
             .Take(limit)
             .ToListAsync(cancellationToken);
@@ -52,28 +54,29 @@ public class TariffRepository : ITariffRepository
     }
 
     /// <summary>
-    /// Retrieves all tariffs for a specific region.
+    /// Retrieves all active tariffs for a specific base currency.
     /// </summary>
-    /// <param name="regionCode">The region code to filter by (e.g., "US-CA", "EU-DE").</param>
+    /// <param name="baseCurrency">The base currency code to filter by (e.g., "USD", "EUR").</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A collection of tariff entities matching the region code.</returns>
-    public async Task<IEnumerable<Tariff>> GetByRegionAsync(string regionCode, CancellationToken cancellationToken = default)
+    /// <returns>A collection of active tariff entities matching the base currency.</returns>
+    public async Task<IEnumerable<Tariff>> GetByBaseCurrencyAsync(string baseCurrency, CancellationToken cancellationToken = default)
     {
         return await _context.Tariffs
             .AsNoTracking()
-            .Where(t => t.RegionCode == regionCode)
-            .OrderBy(t => t.Id)
+            .Where(t => t.BaseCurrency == baseCurrency && t.IsActive)
+            .OrderBy(t => t.TargetCurrency)
             .ToListAsync(cancellationToken);
     }
 
     /// <summary>
-    /// Gets the total count of all tariffs in the database.
+    /// Gets the total count of active tariffs in the database.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The total number of tariff records.</returns>
+    /// <returns>The total number of active tariff records.</returns>
     public async Task<int> GetTotalCountAsync(CancellationToken cancellationToken = default)
     {
         return await _context.Tariffs
+            .Where(t => t.IsActive)
             .CountAsync(cancellationToken);
     }
 }

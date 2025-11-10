@@ -13,13 +13,29 @@ public class TariffService(
     /// <summary>
     /// Retrieves tariffs directly from the repository with artificial delay.
     /// </summary>
-    public async Task<TariffsResponseDto> GetTariffsSlowAsync(int limit = 500, int offset = 0, CancellationToken cancellationToken = default)
+    public async Task<TariffsResponseDto> GetTariffsSlowAsync(string? baseCurrency = null, int limit = 500, int offset = 0, CancellationToken cancellationToken = default)
     {
         // Simulate database latency
         await Task.Delay(300, cancellationToken);
 
-        var tariffs = await repository.GetAllAsync(limit, offset, cancellationToken);
-        var total = await repository.GetTotalCountAsync(cancellationToken);
+        IEnumerable<Domain.Entities.Tariff> tariffs;
+        int total;
+
+        if (!string.IsNullOrWhiteSpace(baseCurrency))
+        {
+            // Filter by base currency
+            tariffs = await repository.GetByBaseCurrencyAsync(baseCurrency, cancellationToken);
+            total = tariffs.Count();
+
+            // Apply pagination manually for filtered results
+            tariffs = tariffs.Skip(offset).Take(limit);
+        }
+        else
+        {
+            // Get all active tariffs with pagination
+            tariffs = await repository.GetAllAsync(limit, offset, cancellationToken);
+            total = await repository.GetTotalCountAsync(cancellationToken);
+        }
 
         return new TariffsResponseDto
         {
@@ -33,10 +49,12 @@ public class TariffService(
     /// <summary>
     /// Retrieves tariffs from cache when available, using Cache-Aside pattern.
     /// </summary>
-    public async Task<TariffsResponseDto> GetTariffsCachedAsync(int limit = 500, int offset = 0, CancellationToken cancellationToken = default)
+    public async Task<TariffsResponseDto> GetTariffsCachedAsync(string? baseCurrency = null, int limit = 500, int offset = 0, CancellationToken cancellationToken = default)
     {
-        // 1. Generate cache key based on pagination parameters
-        var cacheKey = $"tariffs:all:{limit}:{offset}";
+        // 1. Generate cache key based on base currency and pagination parameters
+        var cacheKey = string.IsNullOrWhiteSpace(baseCurrency)
+            ? $"tariffs:all:{limit}:{offset}"
+            : $"tariffs:base:{baseCurrency}:{limit}:{offset}";
 
         // 2. Try to get data from cache (Cache Hit scenario)
         var cachedData = await cacheProvider.GetAsync<TariffsResponseDto>(cacheKey, cancellationToken);
@@ -48,8 +66,24 @@ public class TariffService(
         }
 
         // 3. Cache Miss: query database
-        var tariffs = await repository.GetAllAsync(limit, offset, cancellationToken);
-        var total = await repository.GetTotalCountAsync(cancellationToken);
+        IEnumerable<Domain.Entities.Tariff> tariffs;
+        int total;
+
+        if (!string.IsNullOrWhiteSpace(baseCurrency))
+        {
+            // Filter by base currency
+            tariffs = await repository.GetByBaseCurrencyAsync(baseCurrency, cancellationToken);
+            total = tariffs.Count();
+
+            // Apply pagination manually for filtered results
+            tariffs = tariffs.Skip(offset).Take(limit);
+        }
+        else
+        {
+            // Get all active tariffs with pagination
+            tariffs = await repository.GetAllAsync(limit, offset, cancellationToken);
+            total = await repository.GetTotalCountAsync(cancellationToken);
+        }
 
         // 4. Build response object
         var response = new TariffsResponseDto
@@ -71,7 +105,8 @@ public class TariffService(
         return tariffs.Select(t => new TariffDto
         {
             Id = t.Id,
-            RegionCode = t.RegionCode,
+            BaseCurrency = t.BaseCurrency,
+            TargetCurrency = t.TargetCurrency,
             Rate = t.Rate,
             EffectiveDate = t.EffectiveDate
         });

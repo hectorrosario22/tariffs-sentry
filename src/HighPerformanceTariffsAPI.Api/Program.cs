@@ -2,8 +2,11 @@ using HighPerformanceTariffsAPI.Application.Services;
 using HighPerformanceTariffsAPI.Domain.Interfaces;
 using HighPerformanceTariffsAPI.Infrastructure.Caching;
 using HighPerformanceTariffsAPI.Infrastructure.Data;
+using HighPerformanceTariffsAPI.Infrastructure.ExternalApis;
 using HighPerformanceTariffsAPI.Infrastructure.Repositories;
+using HighPerformanceTariffsAPI.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Refit;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
 using System.Threading.RateLimiting;
@@ -110,6 +113,17 @@ builder.Services.AddDbContext<TariffsDbContext>(options =>
 builder.Services.AddScoped<ITariffRepository, TariffRepository>();
 builder.Services.AddScoped<ITariffService, TariffService>();
 
+// Configure Frankfurter API Client with Refit
+var frankfurterBaseUrl = builder.Configuration["ExternalApis:FrankfurterBaseUrl"]
+    ?? throw new InvalidOperationException("Frankfurter base URL not configured");
+
+builder.Services.AddRefitClient<IFrankfurterApiClient>()
+    .ConfigureHttpClient(c => c.BaseAddress = new Uri(frankfurterBaseUrl))
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
+// Register Tariff Synchronization Hosted Service
+builder.Services.AddHostedService<TariffSyncService>();
+
 // Configure Redis
 try
 {
@@ -182,15 +196,15 @@ await dbContext.Database.MigrateAsync();
 await app.RunAsync();
 
 // Endpoint handlers
-async Task<IResult> GetTariffsSlow(ITariffService service, int limit = 500, int offset = 0, CancellationToken ct = default)
+async Task<IResult> GetTariffsSlow(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
 {
-    var result = await service.GetTariffsSlowAsync(limit, offset, ct);
+    var result = await service.GetTariffsSlowAsync(@base, limit, offset, ct);
     return Results.Ok(result);
 }
 
-async Task<IResult> GetTariffsFast(ITariffService service, int limit = 500, int offset = 0, CancellationToken ct = default)
+async Task<IResult> GetTariffsFast(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
 {
-    var result = await service.GetTariffsCachedAsync(limit, offset, ct);
+    var result = await service.GetTariffsCachedAsync(@base, limit, offset, ct);
     return Results.Ok(result);
 }
 
@@ -201,4 +215,5 @@ public class NullCacheProvider : ICacheProvider
     public Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default) where T : class => Task.CompletedTask;
     public Task RemoveAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    public Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
