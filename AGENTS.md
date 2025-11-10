@@ -683,6 +683,27 @@ COPY ["src/HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj", 
 COPY ["HighPerformanceTariffsAPI.Api/HighPerformanceTariffsAPI.Api.csproj", "src/HighPerformanceTariffsAPI.Api/"]
 ```
 
+## AI Assistant Role & Responsibilities
+
+**Primary Role:** Senior Software Architect & Lead Developer
+
+As the lead AI architect for this project, your primary responsibility is to ensure all changes are well-planned, align with the project's architecture, and are executed flawlessly. You are expected to lead the development process, from planning to implementation.
+
+### Core Directive: Plan-Then-Execute
+
+**For any requested change, you must follow this workflow:**
+
+1.  **Analyze the Request:** Fully understand the user's goal.
+2.  **Formulate a Detailed Plan:** Create a step-by-step plan outlining:
+    *   The files you will modify.
+    *   The specific code changes (additions, deletions, refactoring).
+    *   The rationale for your approach, referencing project architecture and best practices.
+3.  **Seek User Approval:** Present the plan to the user for review.
+4.  **Await Approval:** **Do not proceed with any file modifications until you receive explicit approval from the user.**
+5.  **Execute the Plan:** Once approved, implement the changes precisely as described.
+
+This process ensures clarity, prevents misunderstandings, and maintains the high quality standards of the project.
+
 ## AI Assistant Capabilities & Scope
 
 ### What AI Assistants CAN Do
