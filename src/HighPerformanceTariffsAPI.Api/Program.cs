@@ -10,215 +10,243 @@ using Microsoft.EntityFrameworkCore;
 using HealthChecks.UI.Client;
 using Refit;
 using Scalar.AspNetCore;
+using Serilog;
+using Serilog.Formatting.Json;
 using StackExchange.Redis;
 using System.Threading.RateLimiting;
 
-var builder = WebApplication.CreateBuilder(args);
+// Configure Serilog for structured JSON logging
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console(new JsonFormatter())
+    .CreateBootstrapLogger();
 
-// Add services
-builder.Services.AddOpenApi();
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader();
-    });
-});
+Log.Information("Starting up HighPerformanceTariffsAPI");
 
-// Add Health Checks
-builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("PostgreSQL")!,
-        name: "PostgreSQL DB",
-        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
-        tags: new[] { "db", "postgresql" })
-    .AddRedis(builder.Configuration.GetConnectionString("Redis")!,
-        name: "Redis Cache",
-        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
-        tags: new[] { "cache", "redis" });
-
-// Add Rate Limiting with named policies and bypass support
-var strictPolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:PermitLimit", 2);
-var strictPolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:WindowSeconds", 60);
-var permissivePolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:PermitLimit", 20);
-var permissivePolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:WindowSeconds", 60);
-var bypassKey = builder.Configuration.GetValue<string>("RateLimiting:BypassKey") ?? "performance-test-bypass";
-
-builder.Services.AddRateLimiter(options =>
-{
-    // StrictPolicy with bypass support
-    options.AddPolicy("StrictPolicy", ctx =>
-    {
-        var bypassHeader = ctx.Request.Headers.TryGetValue("X-Bypass-RateLimit", out var headerValue)
-            ? headerValue.ToString()
-            : null;
-
-        if (!string.IsNullOrEmpty(bypassHeader) && bypassHeader == bypassKey)
-        {
-            return RateLimitPartition.GetNoLimiter("bypass");
-        }
-
-        var ipAddress = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(
-            ipAddress, partition => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = strictPolicyLimit,
-                Window = TimeSpan.FromSeconds(strictPolicyWindow),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                AutoReplenishment = true
-            });
-    });
-
-    // PermissivePolicy with bypass support
-    options.AddPolicy("PermissivePolicy", ctx =>
-    {
-        var bypassHeader = ctx.Request.Headers.TryGetValue("X-Bypass-RateLimit", out var headerValue)
-            ? headerValue.ToString()
-            : null;
-
-        if (!string.IsNullOrEmpty(bypassHeader) && bypassHeader == bypassKey)
-        {
-            return RateLimitPartition.GetNoLimiter("bypass");
-        }
-
-        var ipAddress = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(
-            ipAddress, partition => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = permissivePolicyLimit,
-                Window = TimeSpan.FromSeconds(permissivePolicyWindow),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                AutoReplenishment = true
-            });
-    });
-
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.OnRejected = async (context, cancellationToken) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterTimeSpan)
-            ? (int)retryAfterTimeSpan.TotalSeconds
-            : 60;
-
-        context.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
-
-        await context.HttpContext.Response.WriteAsJsonAsync(new
-        {
-            error = "Rate limit exceeded",
-            message = $"Too many requests. Retry after {retryAfter} seconds",
-            retryAfter,
-            timestamp = DateTime.UtcNow
-        }, cancellationToken);
-    };
-});
-
-// Register DbContext with PostgreSQL
-var postgresConnection = builder.Configuration.GetConnectionString("PostgreSQL")
-    ?? throw new InvalidOperationException("PostgreSQL connection string not configured");
-
-builder.Services.AddDbContext<TariffsDbContext>(options =>
-{
-    options.UseNpgsql(postgresConnection);
-});
-
-// Register Infrastructure Services (Scoped for DbContext)
-builder.Services.AddScoped<ITariffRepository, TariffRepository>();
-builder.Services.AddScoped<ITariffService, TariffService>();
-
-// Configure Frankfurter API Client with Refit
-var frankfurterBaseUrl = builder.Configuration["ExternalApis:FrankfurterBaseUrl"]
-    ?? throw new InvalidOperationException("Frankfurter base URL not configured");
-
-builder.Services.AddRefitClient<IFrankfurterApiClient>()
-    .ConfigureHttpClient(c => c.BaseAddress = new Uri(frankfurterBaseUrl))
-    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
-
-// Register Tariff Synchronization Hosted Service
-builder.Services.AddHostedService<TariffSyncService>();
-
-// Configure Redis
 try
 {
-    var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379";
-    var options = ConfigurationOptions.Parse(redisConnection);
-    options.ConnectTimeout = 5000;
-    options.AbortOnConnectFail = false;
-    var redis = ConnectionMultiplexer.Connect(options);
-    builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
-    builder.Services.AddSingleton<ICacheProvider, RedisCacheProvider>();
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Replace default logging with Serilog
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(new JsonFormatter()));
+
+    // Add services
+    builder.Services.AddOpenApi();
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowAll", policy =>
+        {
+            policy.AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        });
+    });
+
+    // Add Health Checks
+    builder.Services.AddHealthChecks()
+        .AddNpgSql(builder.Configuration.GetConnectionString("PostgreSQL")!,
+            name: "PostgreSQL DB",
+            failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+            tags: new[] { "db", "postgresql" })
+        .AddRedis(builder.Configuration.GetConnectionString("Redis")!,
+            name: "Redis Cache",
+            failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+            tags: new[] { "cache", "redis" });
+
+    // Add Rate Limiting with named policies and bypass support
+    var strictPolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:PermitLimit", 2);
+    var strictPolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:StrictPolicy:WindowSeconds", 60);
+    var permissivePolicyLimit = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:PermitLimit", 20);
+    var permissivePolicyWindow = builder.Configuration.GetValue<int>("RateLimiting:PermissivePolicy:WindowSeconds", 60);
+    var bypassKey = builder.Configuration.GetValue<string>("RateLimiting:BypassKey") ?? "performance-test-bypass";
+
+    builder.Services.AddRateLimiter(options =>
+    {
+        // StrictPolicy with bypass support
+        options.AddPolicy("StrictPolicy", ctx =>
+        {
+            var bypassHeader = ctx.Request.Headers.TryGetValue("X-Bypass-RateLimit", out var headerValue)
+                ? headerValue.ToString()
+                : null;
+
+            if (!string.IsNullOrEmpty(bypassHeader) && bypassHeader == bypassKey)
+            {
+                return RateLimitPartition.GetNoLimiter("bypass");
+            }
+
+            var ipAddress = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(
+                ipAddress, partition => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = strictPolicyLimit,
+                    Window = TimeSpan.FromSeconds(strictPolicyWindow),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true
+                });
+        });
+
+        // PermissivePolicy with bypass support
+        options.AddPolicy("PermissivePolicy", ctx =>
+        {
+            var bypassHeader = ctx.Request.Headers.TryGetValue("X-Bypass-RateLimit", out var headerValue)
+                ? headerValue.ToString()
+                : null;
+
+            if (!string.IsNullOrEmpty(bypassHeader) && bypassHeader == bypassKey)
+            {
+                return RateLimitPartition.GetNoLimiter("bypass");
+            }
+
+            var ipAddress = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(
+                ipAddress, partition => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = permissivePolicyLimit,
+                    Window = TimeSpan.FromSeconds(permissivePolicyWindow),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true
+                });
+        });
+
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.OnRejected = async (context, cancellationToken) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterTimeSpan)
+                ? (int)retryAfterTimeSpan.TotalSeconds
+                : 60;
+
+            context.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
+
+            await context.HttpContext.Response.WriteAsJsonAsync(new
+            {
+                error = "Rate limit exceeded",
+                message = $"Too many requests. Retry after {retryAfter} seconds",
+                retryAfter,
+                timestamp = DateTime.UtcNow
+            }, cancellationToken);
+        };
+    });
+
+    // Register DbContext with PostgreSQL
+    var postgresConnection = builder.Configuration.GetConnectionString("PostgreSQL")
+        ?? throw new InvalidOperationException("PostgreSQL connection string not configured");
+
+    builder.Services.AddDbContext<TariffsDbContext>(options =>
+    {
+        options.UseNpgsql(postgresConnection);
+    });
+
+    // Register Infrastructure Services (Scoped for DbContext)
+    builder.Services.AddScoped<ITariffRepository, TariffRepository>();
+    builder.Services.AddScoped<ITariffService, TariffService>();
+
+    // Configure Frankfurter API Client with Refit
+    var frankfurterBaseUrl = builder.Configuration["ExternalApis:FrankfurterBaseUrl"]
+        ?? throw new InvalidOperationException("Frankfurter base URL not configured");
+
+    builder.Services.AddRefitClient<IFrankfurterApiClient>()
+        .ConfigureHttpClient(c => c.BaseAddress = new Uri(frankfurterBaseUrl))
+        .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
+    // Register Tariff Synchronization Hosted Service
+    builder.Services.AddHostedService<TariffSyncService>();
+
+    // Configure Redis
+    try
+    {
+        var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379";
+        var options = ConfigurationOptions.Parse(redisConnection);
+        options.ConnectTimeout = 5000;
+        options.AbortOnConnectFail = false;
+        var redis = ConnectionMultiplexer.Connect(options);
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+        builder.Services.AddSingleton<ICacheProvider, RedisCacheProvider>();
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Redis connection failed. Falling back to NullCacheProvider.");
+        // Continue without Redis cache if connection fails
+        builder.Services.AddSingleton<ICacheProvider, NullCacheProvider>();
+    }
+
+    var app = builder.Build();
+    
+    // Configure the HTTP request pipeline
+    if (app.Environment.IsDevelopment())
+    {
+        app.MapOpenApi();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseCors("AllowAll");
+    app.UseRateLimiter();
+
+    // Map Scalar documentation to root
+    app.MapScalarApiReference("/", options =>
+    {
+        options.WithTitle("High Performance Tariffs API")
+            .WithTheme(ScalarTheme.Default)
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
+
+    // Health check endpoint
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+    });
+
+    // Tariffs API endpoints (v1)
+    var group = app.MapGroup("/api/v1/tariffs")
+        .WithTags("Tariffs");
+
+    group.MapGet("/slow", GetTariffsSlow)
+        .WithName("GetTariffsSlow")
+        .WithDescription("Simulates direct database read with artificial latency")
+        .Produces(200)
+        .Produces(429)
+        .RequireRateLimiting("StrictPolicy")
+        .WithOpenApi();
+
+    group.MapGet("/fast", GetTariffsFast)
+        .WithName("GetTariffsFast")
+        .WithDescription("Optimized endpoint using distributed cache")
+        .Produces(200)
+        .Produces(429)
+        .RequireRateLimiting("PermissivePolicy")
+        .WithOpenApi();
+
+    // This is a demo application, so we apply migrations at startup for convenience
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<TariffsDbContext>();
+    await dbContext.Database.MigrateAsync();
+
+    await app.RunAsync();
+
+    // Endpoint handlers
+    async Task<IResult> GetTariffsSlow(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
+    {
+        var result = await service.GetTariffsSlowAsync(@base, limit, offset, ct);
+        return Results.Ok(result);
+    }
+
+    async Task<IResult> GetTariffsFast(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
+    {
+        var result = await service.GetTariffsCachedAsync(@base, limit, offset, ct);
+        return Results.Ok(result);
+    }
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Warning: Redis connection failed: {ex.Message}");
-    // Continue without Redis cache if connection fails
-    builder.Services.AddSingleton<ICacheProvider, NullCacheProvider>();
+    Log.Fatal(ex, "Application terminated unexpectedly");
 }
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+finally
 {
-    app.MapOpenApi();
-}
-
-app.UseHttpsRedirection();
-app.UseCors("AllowAll");
-app.UseRateLimiter();
-
-// Map Scalar documentation to root
-app.MapScalarApiReference("/", options =>
-{
-    options.WithTitle("High Performance Tariffs API")
-        .WithTheme(ScalarTheme.Default)
-        .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-});
-
-// Health check endpoint
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
-
-// Tariffs API endpoints (v1)
-var group = app.MapGroup("/api/v1/tariffs")
-    .WithTags("Tariffs");
-
-group.MapGet("/slow", GetTariffsSlow)
-    .WithName("GetTariffsSlow")
-    .WithDescription("Simulates direct database read with artificial latency")
-    .Produces(200)
-    .Produces(429)
-    .RequireRateLimiting("StrictPolicy")
-    .WithOpenApi();
-
-group.MapGet("/fast", GetTariffsFast)
-    .WithName("GetTariffsFast")
-    .WithDescription("Optimized endpoint using distributed cache")
-    .Produces(200)
-    .Produces(429)
-    .RequireRateLimiting("PermissivePolicy")
-    .WithOpenApi();
-
-// This is a demo application, so we apply migrations at startup for convenience
-using var scope = app.Services.CreateScope();
-var dbContext = scope.ServiceProvider.GetRequiredService<TariffsDbContext>();
-await dbContext.Database.MigrateAsync();
-
-await app.RunAsync();
-
-// Endpoint handlers
-async Task<IResult> GetTariffsSlow(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
-{
-    var result = await service.GetTariffsSlowAsync(@base, limit, offset, ct);
-    return Results.Ok(result);
-}
-
-async Task<IResult> GetTariffsFast(ITariffService service, string? @base = null, int limit = 500, int offset = 0, CancellationToken ct = default)
-{
-    var result = await service.GetTariffsCachedAsync(@base, limit, offset, ct);
-    return Results.Ok(result);
+    Log.Information("Shutting down");
+    Log.CloseAndFlush();
 }
 
 // Null cache provider for when Redis is unavailable

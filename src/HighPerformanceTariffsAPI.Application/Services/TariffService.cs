@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using HighPerformanceTariffsAPI.Application.DTOs;
 using HighPerformanceTariffsAPI.Domain.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace HighPerformanceTariffsAPI.Application.Services;
 
@@ -7,7 +9,9 @@ namespace HighPerformanceTariffsAPI.Application.Services;
 /// Service for tariff operations with direct database access (simulated).
 /// </summary>
 public class TariffService(
-    ITariffRepository repository, ICacheProvider cacheProvider) : ITariffService
+    ITariffRepository repository,
+    ICacheProvider cacheProvider,
+    ILogger<TariffService> logger) : ITariffService
 {
 
     /// <summary>
@@ -60,10 +64,14 @@ public class TariffService(
         var cachedData = await cacheProvider.GetAsync<TariffsResponseDto>(cacheKey, cancellationToken);
         if (cachedData != null)
         {
+            logger.LogInformation("Cache Hit for key {CacheKey}. Data: {@CachedData}", cacheKey, cachedData);
             cachedData.FromCache = true;
             cachedData.Timestamp = DateTime.UtcNow;
             return cachedData;
         }
+        
+        logger.LogInformation("Cache Miss for key {CacheKey}. Fetching from database.", cacheKey);
+        var stopwatch = Stopwatch.StartNew();
 
         // 3. Cache Miss: query database
         IEnumerable<Domain.Entities.Tariff> tariffs;
@@ -84,6 +92,9 @@ public class TariffService(
             tariffs = await repository.GetAllAsync(limit, offset, cancellationToken);
             total = await repository.GetTotalCountAsync(cancellationToken);
         }
+        
+        stopwatch.Stop();
+        logger.LogInformation("Database query for {CacheKey} completed in {DurationMs}ms", cacheKey, stopwatch.ElapsedMilliseconds);
 
         // 4. Build response object
         var response = new TariffsResponseDto
@@ -94,6 +105,8 @@ public class TariffService(
             FromCache = false,
             CachedAt = DateTime.UtcNow
         };
+        
+        logger.LogInformation("Cache Miss for key {CacheKey}. Data fetched from DB and will be cached: {@ResponseData}", cacheKey, response);
 
         // 5. Store in Redis cache with 5-minute TTL
         await cacheProvider.SetAsync(cacheKey, response, TimeSpan.FromMinutes(5), cancellationToken);
